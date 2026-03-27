@@ -140,29 +140,80 @@ export default function RecommendationsTable({ recommendations, prices, onAddPos
 
                   {isExpanded && (
                     <tr className="bg-[#0d1424]">
-                      <td colSpan={10} className="px-6 py-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                              </svg>
-                              <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">AI Rationale</span>
+                      <td colSpan={11} className="px-6 py-5">
+                        <div className="space-y-4">
+                          {/* Exit Goal + Stop Loss cards */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {/* Entry */}
+                            <div className="bg-[#141d35] border border-[#1a2442] rounded-xl p-4">
+                              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Entry Zone</div>
+                              <div className="mono text-lg font-bold text-cyan-400">{rec.entryZone}</div>
+                              <div className="text-xs text-gray-500 mt-1">{rec.timeframe} hold</div>
                             </div>
-                            <p className="text-sm text-gray-300 leading-relaxed">{rec.rationale}</p>
+                            {/* Exit Goal */}
+                            <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-4">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                                </svg>
+                                <div className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Exit Goal — Take Profit</div>
+                              </div>
+                              <div className="mono text-lg font-bold text-emerald-400">{rec.target}</div>
+                              <div className="text-xs text-emerald-600 mt-1">
+                                {(() => {
+                                  const entryNum = parseFloat(rec.entryZone.replace(/[^0-9.]/g, ''));
+                                  const targetNum = parseFloat(rec.target.replace(/[^0-9.]/g, ''));
+                                  if (!entryNum || !targetNum) return null;
+                                  const pct = (((targetNum - entryNum) / entryNum) * 100 * (rec.direction === 'SHORT' ? -1 : 1)).toFixed(1);
+                                  return `~${pct}% potential gain`;
+                                })()}
+                              </div>
+                            </div>
+                            {/* Stop Loss */}
+                            <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <svg className="w-3 h-3 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
+                                </svg>
+                                <div className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">Stop Loss — Max Risk</div>
+                              </div>
+                              <div className="mono text-lg font-bold text-red-400">{rec.stopLoss}</div>
+                              <div className="text-xs text-red-700 mt-1">
+                                {(() => {
+                                  const entryNum = parseFloat(rec.entryZone.replace(/[^0-9.]/g, ''));
+                                  const stopNum = parseFloat(rec.stopLoss.replace(/[^0-9.]/g, ''));
+                                  if (!entryNum || !stopNum) return null;
+                                  const pct = Math.abs(((stopNum - entryNum) / entryNum) * 100).toFixed(1);
+                                  return `~${pct}% max downside`;
+                                })()}
+                              </div>
+                            </div>
                           </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onAddPosition(rec);
-                            }}
-                            className="btn-ghost flex-shrink-0"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                            </svg>
-                            Track Position
-                          </button>
+
+                          {/* AI Rationale + Track button */}
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                                </svg>
+                                <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">AI Rationale</span>
+                              </div>
+                              <p className="text-sm text-gray-300 leading-relaxed">{rec.rationale}</p>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onAddPosition(rec);
+                              }}
+                              className="btn-ghost flex-shrink-0"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                              </svg>
+                              Track Position
+                            </button>
+                          </div>
                         </div>
                       </td>
                     </tr>
