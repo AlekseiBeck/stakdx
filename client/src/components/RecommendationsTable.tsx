@@ -26,8 +26,21 @@ function ConfidenceBar({ value }: { value: number }) {
   );
 }
 
+type SortDir = 'default' | 'desc' | 'asc';
+
 export default function RecommendationsTable({ recommendations, prices, onAddPosition }: Props) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [sortDir, setSortDir] = useState<SortDir>('default');
+
+  const sortedRecs = [...recommendations].sort((a, b) => {
+    if (sortDir === 'desc') return b.confidence - a.confidence;
+    if (sortDir === 'asc') return a.confidence - b.confidence;
+    return 0;
+  });
+
+  const cycleSort = () => {
+    setSortDir((prev) => prev === 'default' ? 'desc' : prev === 'desc' ? 'asc' : 'default');
+  };
 
   const toggleRow = (ticker: string) => {
     setExpandedRows((prev) => {
@@ -61,7 +74,19 @@ export default function RecommendationsTable({ recommendations, prices, onAddPos
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-10">#</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Ticker</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Direction</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider min-w-[140px]">Confidence</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider min-w-[140px]">
+                <button onClick={cycleSort} className="flex items-center gap-1.5 text-gray-500 hover:text-blue-400 transition-colors group">
+                  Confidence
+                  <span className="flex flex-col leading-none">
+                    <svg className={`w-2.5 h-2.5 transition-colors ${sortDir === 'asc' ? 'text-blue-400' : 'text-gray-600 group-hover:text-gray-400'}`} fill="currentColor" viewBox="0 0 10 6">
+                      <path d="M5 0L10 6H0z"/>
+                    </svg>
+                    <svg className={`w-2.5 h-2.5 transition-colors ${sortDir === 'desc' ? 'text-blue-400' : 'text-gray-600 group-hover:text-gray-400'}`} fill="currentColor" viewBox="0 0 10 6">
+                      <path d="M5 6L0 0H10z"/>
+                    </svg>
+                  </span>
+                </button>
+              </th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Entry Zone</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Stop Loss</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Target</th>
@@ -72,7 +97,7 @@ export default function RecommendationsTable({ recommendations, prices, onAddPos
             </tr>
           </thead>
           <tbody>
-            {recommendations.map((rec, idx) => {
+            {sortedRecs.map((rec, idx) => {
               const isExpanded = expandedRows.has(rec.ticker);
               return (
                 <React.Fragment key={rec.ticker}>
