@@ -3,6 +3,7 @@ import { TradeRecommendation } from '../types';
 
 interface Props {
   recommendations: TradeRecommendation[];
+  prices: Record<string, number>;
   onAddPosition: (rec: TradeRecommendation) => void;
 }
 
@@ -25,7 +26,7 @@ function ConfidenceBar({ value }: { value: number }) {
   );
 }
 
-export default function RecommendationsTable({ recommendations, onAddPosition }: Props) {
+export default function RecommendationsTable({ recommendations, prices, onAddPosition }: Props) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const toggleRow = (ticker: string) => {
@@ -65,6 +66,7 @@ export default function RecommendationsTable({ recommendations, onAddPosition }:
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Stop Loss</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Target</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timeframe</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Price</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Pattern</th>
               <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-12"></th>
             </tr>
@@ -115,6 +117,13 @@ export default function RecommendationsTable({ recommendations, onAddPosition }:
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="text-sm text-gray-400">{rec.timeframe}</span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      {prices[rec.ticker] ? (
+                        <span className="mono text-sm font-semibold text-white">${prices[rec.ticker].toFixed(2)}</span>
+                      ) : (
+                        <span className="text-gray-600 text-sm">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="text-xs text-gray-400 bg-[#1a2442] px-2 py-0.5 rounded">{rec.pattern}</span>

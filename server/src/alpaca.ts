@@ -159,4 +159,27 @@ export async function fetchNewsForTicker(ticker: string): Promise<NewsItem[] | n
   }
 }
 
+export async function fetchLatestPrices(): Promise<Record<string, number> | null> {
+  if (!hasAlpacaKeys()) return null;
+
+  const endpoint = process.env.ALPACA_ENDPOINT || 'https://data.alpaca.markets';
+
+  try {
+    const response = await axios.get(`${endpoint}/v2/stocks/trades/latest`, {
+      headers: getAlpacaHeaders(),
+      params: { symbols: WATCHLIST.join(','), feed: 'iex' },
+    });
+
+    const trades = response.data.trades as Record<string, { p: number }>;
+    const prices: Record<string, number> = {};
+    for (const [ticker, trade] of Object.entries(trades)) {
+      prices[ticker] = trade.p;
+    }
+    return prices;
+  } catch (err) {
+    console.error('Alpaca latest prices error:', err);
+    return null;
+  }
+}
+
 export { WATCHLIST, hasAlpacaKeys };

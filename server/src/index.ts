@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { fetchCandles, fetchCandlesForTicker, fetchNews, fetchNewsForTicker } from './alpaca';
+import { fetchCandles, fetchCandlesForTicker, fetchNews, fetchNewsForTicker, fetchLatestPrices } from './alpaca';
 import { analyzeCandlesWithClaude, analyzePositionWithClaude } from './claude';
 import { MOCK_RECOMMENDATIONS, MOCK_NEWS, MOCK_POSITION_UPDATE } from './mockData';
 import { requireAuth, AuthRequest } from './auth';
@@ -24,20 +24,20 @@ const memPositions = new Map<string, Position & { userId: string }>();
 // GET /api/scan
 app.get('/api/scan', requireAuth, async (_req, res) => {
   try {
-    const [candles, news] = await Promise.all([fetchCandles(), fetchNews()]);
+    const [candles, news, prices] = await Promise.all([fetchCandles(), fetchNews(), fetchLatestPrices()]);
 
     if (!candles) {
-      return res.json({ recommendations: MOCK_RECOMMENDATIONS, mock: true });
+      return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: {}, mock: true });
     }
 
     const newsItems = news ?? MOCK_NEWS;
     const recommendations = await analyzeCandlesWithClaude(candles, newsItems);
 
     if (!recommendations) {
-      return res.json({ recommendations: MOCK_RECOMMENDATIONS, mock: true });
+      return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: prices ?? {}, mock: true });
     }
 
-    return res.json({ recommendations, mock: false });
+    return res.json({ recommendations, prices: prices ?? {}, mock: false });
   } catch (err) {
     console.error('[scan] Error:', err);
     return res.status(500).json({ recommendations: MOCK_RECOMMENDATIONS, mock: true });

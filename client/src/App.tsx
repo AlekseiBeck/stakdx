@@ -31,6 +31,7 @@ export default function App() {
 
 function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userEmail: string }) {
   const [recommendations, setRecommendations] = useState<TradeRecommendation[]>([]);
+  const [prices, setPrices] = useState<Record<string, number>>({});
   const [news, setNews] = useState<NewsItem[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [isScanning, setIsScanning] = useState(false);
@@ -68,6 +69,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     try {
       const result = await runScan();
       setRecommendations(result.recommendations);
+      setPrices(result.prices ?? {});
       setLastScanTime(new Date());
       setIsMockData(result.mock);
     } catch (err) {
@@ -163,6 +165,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
             </div>
             <RecommendationsTable
               recommendations={recommendations}
+              prices={prices}
               onAddPosition={(rec) => handleOpenAddModal(rec)}
             />
           </div>
