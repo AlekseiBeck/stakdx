@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { TradeRecommendation, NewsItem, Position, PositionUpdate } from './types';
 
-const BASE = '/api';
+const BASE = ((import.meta as Record<string, any>).env.VITE_API_URL ?? '') + '/api';
 
 async function authHeaders(): Promise<HeadersInit> {
   const { data } = await supabase.auth.getSession();
