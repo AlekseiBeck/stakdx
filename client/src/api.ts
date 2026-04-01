@@ -34,8 +34,9 @@ async function del(path: string) {
   return res.json();
 }
 
-export async function runScan(): Promise<{ recommendations: TradeRecommendation[]; prices: Record<string, number>; mock: boolean }> {
-  return get('/scan');
+export async function runScan(buyingPower?: number): Promise<{ recommendations: TradeRecommendation[]; prices: Record<string, number>; mock: boolean }> {
+  const query = buyingPower ? `?buyingPower=${buyingPower}` : '';
+  return get(`/scan${query}`);
 }
 
 export async function fetchNews(): Promise<{ news: NewsItem[]; mock: boolean }> {

@@ -1,7 +1,38 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Candle, TradeRecommendation, NewsItem, PositionUpdate, Position } from './types';
 
-const SYSTEM_PROMPT = `You are an expert swing trader with 20 years of experience. Analyze the provided stock data and identify the top swing trade candidates for a 1-3 day hold. For each candidate consider: candlestick patterns (engulfing, doji, hammer, shooting star), trend direction, volume vs average, proximity to key levels, momentum indicators implied by price action, and any news catalysts. Return ONLY a valid JSON array, no markdown, no explanation outside the JSON. Each object must have: ticker (string), direction ('LONG' or 'SHORT'), confidence (number 1-100), entryZone (string e.g. '$182.50 - $183.00'), stopLoss (string), target (string), timeframe (string), rationale (string, 2-3 sentences max), pattern (string, the key candlestick or chart pattern identified).`;
+function buildScanPrompt(buyingPower: number | null): string {
+  const hasBP = buyingPower && buyingPower > 0;
+  const maxRiskPerTrade = hasBP ? (buyingPower! * 0.02).toFixed(2) : null;
+
+  return `You are an expert swing trader with 20 years of experience. Analyze the provided stock data and identify the top swing trade candidates for a 1-3 day hold.
+
+${hasBP ? `BUYING POWER: The trader has $${buyingPower!.toLocaleString()} available. Risk no more than 2% per trade (max $${maxRiskPerTrade} loss per trade). Size positions so the stop loss distance does not exceed this max risk. Prioritize the highest conviction setups that fit within this budget.` : ''}
+
+For each candidate consider:
+- Candlestick patterns (engulfing, doji, hammer, shooting star, morning/evening star)
+- Trend direction and momentum implied by price action
+- Volume vs average (high volume confirms moves)
+- Proximity to key support/resistance levels
+- News catalysts from provided headlines
+- Trade type: LONG (buy stock), SHORT (sell short), CALL (buy call option for bullish momentum), PUT (buy put option for bearish momentum)
+
+For CALL and PUT options, base the recommendation on strong directional conviction in the underlying stock. Options are preferable when: implied move is large, buying power is limited, or the setup has very high confidence (75+).
+
+Return ONLY a valid JSON array, no markdown, no explanation outside the JSON. Each object must have:
+- ticker (string)
+- direction ('LONG', 'SHORT', 'CALL', or 'PUT')
+- confidence (number 1-100)
+- entryZone (string e.g. '$182.50 - $183.00')
+- stopLoss (string)
+- target (string)
+- timeframe (string)
+- rationale (string, 2-3 sentences max)
+- pattern (string, the key candlestick or chart pattern identified)
+- positionSize (string, e.g. '${hasBP ? '45 shares' : 'size to 2% risk'}' for stocks or '2 contracts' for options${hasBP ? ` — calculated so max loss equals ~$${maxRiskPerTrade}` : ''})
+- maxRisk (string, e.g. '$180.00' — the dollar amount at risk if stop is hit)
+- potentialGain (string, e.g. '$450.00' — the dollar gain if target is reached based on position size)`;
+}
 
 function hasAnthropicKey(): boolean {
   return !!(process.env.ANTHROPIC_API_KEY &&
@@ -10,7 +41,8 @@ function hasAnthropicKey(): boolean {
 
 export async function analyzeCandlesWithClaude(
   candleData: Record<string, Candle[]>,
-  news: NewsItem[]
+  news: NewsItem[],
+  buyingPower: number | null = null
 ): Promise<TradeRecommendation[] | null> {
   if (!hasAnthropicKey()) return null;
 
@@ -24,13 +56,14 @@ export async function analyzeCandlesWithClaude(
       source: n.source,
     })),
     analysisDate: new Date().toISOString().split('T')[0],
+    ...(buyingPower ? { buyingPower } : {}),
   };
 
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
+      system: buildScanPrompt(buyingPower),
       messages: [
         {
           role: 'user',
@@ -40,7 +73,6 @@ export async function analyzeCandlesWithClaude(
     });
 
     const rawText = message.content[0].type === 'text' ? message.content[0].text : '';
-    // Strip any accidental markdown fences
     const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleaned) as TradeRecommendation[];
     return parsed;
@@ -61,9 +93,6 @@ export async function analyzePositionWithClaude(
 
   const latestCandle = candles[candles.length - 1];
   const currentPrice = latestCandle?.c ?? 0;
-  const priceChange = latestCandle
-    ? (((latestCandle.c - latestCandle.o) / latestCandle.o) * 100).toFixed(2)
-    : '0.00';
 
   const dataPayload = {
     position: {

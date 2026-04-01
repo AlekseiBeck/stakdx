@@ -22,7 +22,9 @@ app.use(express.json());
 const memPositions = new Map<string, Position & { userId: string }>();
 
 // GET /api/scan
-app.get('/api/scan', requireAuth, async (_req, res) => {
+app.get('/api/scan', requireAuth, async (req, res) => {
+  const buyingPower = req.query.buyingPower ? parseFloat(req.query.buyingPower as string) : null;
+
   try {
     const [candles, news, prices] = await Promise.all([fetchCandles(), fetchNews(), fetchLatestPrices()]);
 
@@ -31,7 +33,7 @@ app.get('/api/scan', requireAuth, async (_req, res) => {
     }
 
     const newsItems = news ?? MOCK_NEWS;
-    const recommendations = await analyzeCandlesWithClaude(candles, newsItems);
+    const recommendations = await analyzeCandlesWithClaude(candles, newsItems, buyingPower);
 
     if (!recommendations) {
       return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: prices ?? {}, mock: true });

@@ -1,6 +1,6 @@
 export interface TradeRecommendation {
   ticker: string;
-  direction: 'LONG' | 'SHORT';
+  direction: 'LONG' | 'SHORT' | 'CALL' | 'PUT';
   confidence: number;
   entryZone: string;
   stopLoss: string;
@@ -8,6 +8,9 @@ export interface TradeRecommendation {
   timeframe: string;
   rationale: string;
   pattern: string;
+  positionSize: string;
+  maxRisk: string;
+  potentialGain: string;
 }
 
 export interface NewsItem {

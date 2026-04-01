@@ -1,30 +1,37 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 
+type Mode = 'login' | 'signup' | 'forgot';
+
 export default function AuthPage() {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
+  const reset = (m: Mode) => { setMode(m); setError(''); setMessage(''); };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setMessage('');
-    setLoading(true);
-
+    setError(''); setMessage(''); setLoading(true);
     try {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-      } else {
+      } else if (mode === 'signup') {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        setMessage('Check your email to confirm your account, then log in.');
-        setMode('login');
+        setMessage('Account created! You can now sign in.');
+        reset('login');
         setPassword('');
+      } else {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+        if (error) throw error;
+        setMessage('Password reset email sent — check your inbox.');
       }
     } catch (err: any) {
       setError(err.message ?? 'Something went wrong');
@@ -35,9 +42,7 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center p-4">
-      {/* Background grid */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.03)_1px,transparent_1px)] bg-[size:64px_64px]" />
-
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -50,59 +55,59 @@ export default function AuthPage() {
           <p className="text-gray-500 text-sm mt-1">AI-Powered Trading Assistant</p>
         </div>
 
-        {/* Card */}
         <div className="card p-6 shadow-2xl shadow-black/50">
-          {/* Tab switcher */}
-          <div className="flex rounded-lg bg-[#141d35] p-1 mb-6">
-            <button
-              type="button"
-              onClick={() => { setMode('login'); setError(''); setMessage(''); }}
-              className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${
-                mode === 'login'
-                  ? 'bg-[#0f1629] text-white shadow-sm'
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => { setMode('signup'); setError(''); setMessage(''); }}
-              className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${
-                mode === 'signup'
-                  ? 'bg-[#0f1629] text-white shadow-sm'
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
+          {/* Tabs — only show for login/signup */}
+          {mode !== 'forgot' && (
+            <div className="flex rounded-lg bg-[#141d35] p-1 mb-6">
+              <button type="button" onClick={() => reset('login')}
+                className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${mode === 'login' ? 'bg-[#0f1629] text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>
+                Sign In
+              </button>
+              <button type="button" onClick={() => reset('signup')}
+                className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${mode === 'signup' ? 'bg-[#0f1629] text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>
+                Create Account
+              </button>
+            </div>
+          )}
+
+          {mode === 'forgot' && (
+            <div className="mb-5">
+              <button onClick={() => reset('login')} className="flex items-center gap-1.5 text-gray-500 hover:text-gray-300 text-sm transition-colors">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+                Back to sign in
+              </button>
+              <h2 className="text-lg font-bold text-white mt-3">Reset your password</h2>
+              <p className="text-gray-500 text-sm mt-1">Enter your email and we'll send a reset link.</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-600"
-              />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com" required
+                className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-600" />
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={6}
-                className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-600"
-              />
-            </div>
+            {mode !== 'forgot' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••" required minLength={6}
+                  className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-600" />
+              </div>
+            )}
+
+            {mode === 'login' && (
+              <div className="text-right -mt-1">
+                <button type="button" onClick={() => reset('forgot')}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                  Forgot password?
+                </button>
+              </div>
+            )}
 
             {error && (
               <div className="flex items-center gap-2 text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">
@@ -124,21 +129,16 @@ export default function AuthPage() {
 
             <button type="submit" disabled={loading} className="btn-primary w-full justify-center mt-2">
               {loading ? (
-                <>
-                  <svg className="w-4 h-4 spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  {mode === 'login' ? 'Signing in...' : 'Creating account...'}
-                </>
-              ) : (
-                mode === 'login' ? 'Sign In' : 'Create Account'
-              )}
+                <><svg className="w-4 h-4 spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>Processing...</>
+              ) : mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link'}
             </button>
           </form>
         </div>
 
         <p className="text-center text-xs text-gray-600 mt-4">
-          By signing in you agree to use this tool for informational purposes only.
+          For informational purposes only. Not financial advice.
         </p>
       </div>
     </div>

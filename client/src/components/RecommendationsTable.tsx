@@ -112,19 +112,36 @@ export default function RecommendationsTable({ recommendations, prices, onAddPos
                       <span className="mono font-bold text-base text-white">{rec.ticker}</span>
                     </td>
                     <td className="px-4 py-3.5">
-                      {rec.direction === 'LONG' ? (
+                      {rec.direction === 'LONG' && (
                         <span className="badge-long">
                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
                           </svg>
                           LONG
                         </span>
-                      ) : (
+                      )}
+                      {rec.direction === 'SHORT' && (
                         <span className="badge-short">
                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
                           </svg>
                           SHORT
+                        </span>
+                      )}
+                      {rec.direction === 'CALL' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-900/50 text-blue-400 border border-blue-700/50">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                          </svg>
+                          CALL
+                        </span>
+                      )}
+                      {rec.direction === 'PUT' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-900/50 text-purple-400 border border-purple-700/50">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
+                          </svg>
+                          PUT
                         </span>
                       )}
                     </td>
@@ -174,6 +191,11 @@ export default function RecommendationsTable({ recommendations, prices, onAddPos
                               <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Entry Zone</div>
                               <div className="mono text-lg font-bold text-cyan-400">{rec.entryZone}</div>
                               <div className="text-xs text-gray-500 mt-1">{rec.timeframe} hold</div>
+                              {rec.positionSize && (
+                                <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-[#1a2442]">
+                                  <span className="text-gray-600">Size: </span>{rec.positionSize}
+                                </div>
+                              )}
                             </div>
                             {/* Exit Goal */}
                             <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-4">
@@ -189,10 +211,13 @@ export default function RecommendationsTable({ recommendations, prices, onAddPos
                                   const entryNum = parseFloat(rec.entryZone.replace(/[^0-9.]/g, ''));
                                   const targetNum = parseFloat(rec.target.replace(/[^0-9.]/g, ''));
                                   if (!entryNum || !targetNum) return null;
-                                  const pct = (((targetNum - entryNum) / entryNum) * 100 * (rec.direction === 'SHORT' ? -1 : 1)).toFixed(1);
+                                  const pct = (((targetNum - entryNum) / entryNum) * 100 * (rec.direction === 'SHORT' || rec.direction === 'PUT' ? -1 : 1)).toFixed(1);
                                   return `~${pct}% potential gain`;
                                 })()}
                               </div>
+                              {rec.potentialGain && (
+                                <div className="text-xs text-emerald-500 font-semibold mt-1">{rec.potentialGain} est. profit</div>
+                              )}
                             </div>
                             {/* Stop Loss */}
                             <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4">
@@ -212,6 +237,9 @@ export default function RecommendationsTable({ recommendations, prices, onAddPos
                                   return `~${pct}% max downside`;
                                 })()}
                               </div>
+                              {rec.maxRisk && (
+                                <div className="text-xs text-red-600 font-semibold mt-1">{rec.maxRisk} max loss</div>
+                              )}
                             </div>
                           </div>
 
