@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { fetchCandles, fetchCandlesForTicker, fetchNews, fetchNewsForTicker, fetchLatestPrices } from './alpaca';
+import { fetchCandles, fetchCandlesForTicker, fetchNews, fetchNewsForTicker, fetchLatestPrices, fetchMarketNews, scoreTicker } from './alpaca';
 import { analyzeCandlesWithClaude, analyzePositionWithClaude } from './claude';
 import { MOCK_RECOMMENDATIONS, MOCK_NEWS, MOCK_POSITION_UPDATE } from './mockData';
 import { requireAuth, AuthRequest } from './auth';
@@ -26,14 +26,32 @@ app.get('/api/scan', requireAuth, async (req, res) => {
   const buyingPower = req.query.buyingPower ? parseFloat(req.query.buyingPower as string) : null;
 
   try {
-    const [candles, news, prices] = await Promise.all([fetchCandles(), fetchNews(), fetchLatestPrices()]);
+    const [candles, news, marketNews, prices] = await Promise.all([
+      fetchCandles(),
+      fetchNews(),
+      fetchMarketNews(),
+      fetchLatestPrices(),
+    ]);
 
     if (!candles) {
       return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: {}, mock: true });
     }
 
+    // Pre-filter: score all tickers and keep top 20 by technical signal strength
+    const scored = Object.entries(candles)
+      .map(([ticker, c]) => ({ ticker, score: scoreTicker(c) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20);
+
+    const topCandles: Record<string, typeof candles[string]> = {};
+    for (const { ticker } of scored) {
+      topCandles[ticker] = candles[ticker];
+    }
+
+    console.log(`[scan] Pre-filtered ${Object.keys(candles).length} tickers → top ${scored.length}: ${scored.map(s => s.ticker).join(', ')}`);
+
     const newsItems = news ?? MOCK_NEWS;
-    const recommendations = await analyzeCandlesWithClaude(candles, newsItems, buyingPower);
+    const recommendations = await analyzeCandlesWithClaude(topCandles, newsItems, marketNews, buyingPower);
 
     if (!recommendations) {
       return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: prices ?? {}, mock: true });

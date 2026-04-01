@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Candle, TradeRecommendation, NewsItem, PositionUpdate, Position } from './types';
+import { summarizeCandles } from './alpaca';
 
 function buildScanPrompt(buyingPower: number | null): string {
   const hasBP = buyingPower && buyingPower > 0;
@@ -42,21 +43,30 @@ function hasAnthropicKey(): boolean {
 export async function analyzeCandlesWithClaude(
   candleData: Record<string, Candle[]>,
   news: NewsItem[],
+  marketNews: NewsItem[],
   buyingPower: number | null = null
 ): Promise<TradeRecommendation[] | null> {
   if (!hasAnthropicKey()) return null;
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  // Compress candle data into compact summaries (much fewer tokens than raw JSON)
+  const stockSummaries = Object.entries(candleData)
+    .map(([ticker, candles]) => summarizeCandles(ticker, candles))
+    .join('\n');
+
+  // Deduplicate and combine news
+  const allNews = [...news, ...marketNews]
+    .filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i)
+    .slice(0, 25)
+    .map((n) => `[${n.symbols.join(',')}] ${n.headline} (${n.source})`);
+
   const dataPayload = {
-    stockData: candleData,
-    recentNews: news.slice(0, 10).map((n) => ({
-      headline: n.headline,
-      symbols: n.symbols,
-      source: n.source,
-    })),
     analysisDate: new Date().toISOString().split('T')[0],
+    stockCount: Object.keys(candleData).length,
     ...(buyingPower ? { buyingPower } : {}),
+    stockSummaries: stockSummaries,
+    news: allNews,
   };
 
   try {
