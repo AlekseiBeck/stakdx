@@ -10,6 +10,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import { useAuth } from './AuthContext';
 import { TradeRecommendation, NewsItem, Position } from './types';
 import { runScan, fetchNews, addPosition, fetchPositions } from './api';
+import { SP500_TICKERS } from './constants';
 
 type DirectionFilter = 'LONG' | 'SHORT' | 'CALL' | 'PUT';
 
@@ -51,6 +52,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const [activeFilters, setActiveFilters] = useState<Set<DirectionFilter>>(
     new Set(['LONG', 'SHORT', 'CALL', 'PUT'])
   );
+  const [sp500Only, setSp500Only] = useState(false);
 
   const loadNews = useCallback(async () => {
     try {
@@ -103,7 +105,10 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     });
   };
 
-  const filteredRecs = recommendations.filter((r) => activeFilters.has(r.direction));
+  const filteredRecs = recommendations.filter((r) =>
+    activeFilters.has(r.direction) &&
+    (!sp500Only || SP500_TICKERS.has(r.ticker))
+  );
 
   const handleAddPosition = async (ticker: string, entryPrice: number, direction: 'long' | 'short') => {
     const newPos = await addPosition(ticker, entryPrice, direction);
@@ -196,8 +201,8 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
                 )}
               </h3>
 
-              {/* Direction filter toggles */}
-              <div className="flex items-center gap-2">
+              {/* Filters */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs text-gray-600">Filter:</span>
                 {filterConfig.map(({ key, label, activeClass }) => (
                   <button
@@ -212,6 +217,22 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
                     {label}
                   </button>
                 ))}
+
+                {/* S&P 500 toggle */}
+                <div className="w-px h-4 bg-[#1a2442] mx-1" />
+                <button
+                  onClick={() => setSp500Only((v) => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border transition-all ${
+                    sp500Only
+                      ? 'bg-amber-900/50 border-amber-600 text-amber-400'
+                      : 'bg-transparent border-[#1a2442] text-gray-600 hover:text-gray-400'
+                  }`}
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                  </svg>
+                  S&P 500 Only
+                </button>
               </div>
             </div>
 

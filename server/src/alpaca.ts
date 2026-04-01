@@ -1,7 +1,32 @@
 import axios from 'axios';
 import { Candle, NewsItem } from './types';
 
-const WATCHLIST = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMD', 'SPY', 'QQQ', 'META', 'AMZN', 'GOOGL'];
+// S&P 500 large caps + high-volume growth stocks
+export const SP500_TICKERS = [
+  // Mega-cap tech
+  'AAPL', 'MSFT', 'NVDA', 'META', 'AMZN', 'GOOGL', 'TSLA', 'AVGO',
+  // Financials
+  'JPM', 'V', 'MA', 'GS', 'MS', 'BAC', 'WFC', 'BLK',
+  // Healthcare
+  'UNH', 'LLY', 'JNJ', 'MRK', 'ABBV', 'TMO', 'AMGN', 'GILD',
+  // Consumer
+  'HD', 'COST', 'WMT', 'KO', 'PEP', 'PG', 'MCD', 'NKE',
+  // Semiconductors & Tech
+  'AMD', 'QCOM', 'TXN', 'INTC', 'MU', 'AMAT', 'NOW', 'CRM',
+  // Energy & Industrial
+  'XOM', 'CVX', 'CAT', 'RTX', 'GE', 'LMT',
+];
+
+// Non-S&P 500: ETFs, high-beta growth, crypto-adjacent
+export const NON_SP500_TICKERS = [
+  'SPY', 'QQQ', 'IWM',           // Index ETFs
+  'PLTR', 'COIN', 'MSTR',        // High-beta / crypto-adjacent
+  'SHOP', 'SNOW', 'DDOG', 'NET', // Cloud growth
+  'ARM', 'MRVL', 'SMCI',         // Semis outside S&P 500
+  'RIVN', 'HOOD', 'RBLX', 'SNAP',// Speculative growth
+];
+
+const WATCHLIST = [...SP500_TICKERS, ...NON_SP500_TICKERS];
 
 function getAlpacaHeaders() {
   return {
