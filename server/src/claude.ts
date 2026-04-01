@@ -148,7 +148,8 @@ export async function analyzeCandlesWithClaude(
   candleData: Record<string, Candle[]>,
   news: NewsItem[],
   marketNews: NewsItem[],
-  buyingPower: number | null = null
+  buyingPower: number | null = null,
+  focusDirections: string[] = []
 ): Promise<TradeRecommendation[] | null> {
   if (!hasAnthropicKey()) return null;
 
@@ -166,10 +167,14 @@ export async function analyzeCandlesWithClaude(
       return `${tickers} ${n.headline} — ${n.summary?.slice(0, 120) ?? ''} (${n.source})`;
     });
 
+  const focusSection = focusDirections.length > 0
+    ? `\nSCAN FOCUS: The user has requested emphasis on: ${focusDirections.join(', ')}. Prioritize setups matching these direction types. You may still include other directions if they are genuinely exceptional (confidence ≥ 85), but the majority of your output should favor the requested types. If no qualifying setups exist for the requested types, return the best available setups regardless of direction.\n`
+    : '';
+
   const userMessage = `Analysis date: ${new Date().toISOString().split('T')[0]}
 Stocks to analyze: ${Object.keys(candleData).length}
 ${buyingPower ? `Buying power: $${buyingPower.toLocaleString()}` : ''}
-
+${focusSection}
 STOCK CANDLE DATA (5 days each):
 ${stockSummaries}
 

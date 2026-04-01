@@ -24,6 +24,9 @@ const memPositions = new Map<string, Position & { userId: string }>();
 // GET /api/scan
 app.get('/api/scan', requireAuth, async (req, res) => {
   const buyingPower = req.query.buyingPower ? parseFloat(req.query.buyingPower as string) : null;
+  const focusDirections = req.query.directions
+    ? (req.query.directions as string).split(',').map(d => d.trim().toUpperCase()).filter(Boolean)
+    : [];
 
   try {
     const [candles, news, marketNews, prices] = await Promise.all([
@@ -51,7 +54,7 @@ app.get('/api/scan', requireAuth, async (req, res) => {
     console.log(`[scan] Pre-filtered ${Object.keys(candles).length} tickers → top ${scored.length}: ${scored.map(s => s.ticker).join(', ')}`);
 
     const newsItems = news ?? MOCK_NEWS;
-    const recommendations = await analyzeCandlesWithClaude(topCandles, newsItems, marketNews, buyingPower);
+    const recommendations = await analyzeCandlesWithClaude(topCandles, newsItems, marketNews, buyingPower, focusDirections);
 
     if (!recommendations) {
       return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: prices ?? {}, mock: true });

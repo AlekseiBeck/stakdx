@@ -49,6 +49,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const [addPositionPrefill, setAddPositionPrefill] = useState<TradeRecommendation | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [buyingPower, setBuyingPower] = useState<string>('');
+  const [scanFocus, setScanFocus] = useState<Set<DirectionFilter>>(new Set());
   const [activeFilters, setActiveFilters] = useState<Set<DirectionFilter>>(
     new Set(['LONG', 'SHORT', 'CALL', 'PUT'])
   );
@@ -80,7 +81,8 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     setScanError('');
     try {
       const bp = buyingPower ? parseFloat(buyingPower.replace(/,/g, '')) : undefined;
-      const result = await runScan(bp);
+      const focus = scanFocus.size > 0 ? Array.from(scanFocus) : undefined;
+      const result = await runScan(bp, focus);
       setRecommendations(result.recommendations);
       setPrices(result.prices ?? {});
       setLastScanTime(new Date());
@@ -90,6 +92,14 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     } finally {
       setIsScanning(false);
     }
+  };
+
+  const toggleScanFocus = (f: DirectionFilter) => {
+    setScanFocus((prev) => {
+      const next = new Set(prev);
+      if (next.has(f)) next.delete(f); else next.add(f);
+      return next;
+    });
   };
 
   const toggleFilter = (f: DirectionFilter) => {
@@ -161,6 +171,33 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
                 />
               </div>
             </div>
+            {/* Scan Focus */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                Scan Focus
+              </label>
+              <div className="flex items-center gap-1">
+                {([
+                  { key: 'LONG' as DirectionFilter, color: 'hover:border-emerald-600 hover:text-emerald-400', activeClass: 'bg-emerald-900/50 border-emerald-600 text-emerald-400' },
+                  { key: 'SHORT' as DirectionFilter, color: 'hover:border-red-600 hover:text-red-400', activeClass: 'bg-red-900/50 border-red-600 text-red-400' },
+                  { key: 'CALL' as DirectionFilter, color: 'hover:border-blue-600 hover:text-blue-400', activeClass: 'bg-blue-900/50 border-blue-600 text-blue-400' },
+                  { key: 'PUT' as DirectionFilter, color: 'hover:border-purple-600 hover:text-purple-400', activeClass: 'bg-purple-900/50 border-purple-600 text-purple-400' },
+                ]).map(({ key, color, activeClass }) => (
+                  <button
+                    key={key}
+                    onClick={() => toggleScanFocus(key)}
+                    className={`px-2.5 py-2 rounded-lg text-[11px] font-bold border transition-all ${
+                      scanFocus.has(key)
+                        ? activeClass
+                        : `bg-transparent border-[#1a2442] text-gray-600 ${color}`
+                    }`}
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <ScanButton onScan={handleScan} isScanning={isScanning} />
           </div>
         </div>

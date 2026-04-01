@@ -34,8 +34,11 @@ async function del(path: string) {
   return res.json();
 }
 
-export async function runScan(buyingPower?: number): Promise<{ recommendations: TradeRecommendation[]; prices: Record<string, number>; mock: boolean }> {
-  const query = buyingPower ? `?buyingPower=${buyingPower}` : '';
+export async function runScan(buyingPower?: number, focusDirections?: string[]): Promise<{ recommendations: TradeRecommendation[]; prices: Record<string, number>; mock: boolean }> {
+  const params = new URLSearchParams();
+  if (buyingPower) params.set('buyingPower', String(buyingPower));
+  if (focusDirections && focusDirections.length > 0) params.set('directions', focusDirections.join(','));
+  const query = params.toString() ? `?${params.toString()}` : '';
   return get(`/scan${query}`);
 }
 
