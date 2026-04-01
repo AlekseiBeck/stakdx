@@ -44,7 +44,7 @@ app.get('/api/scan', requireAuth, async (req, res) => {
     const scored = Object.entries(candles)
       .map(([ticker, c]) => ({ ticker, score: scoreTicker(c) }))
       .sort((a, b) => b.score - a.score)
-      .slice(0, 20);
+      .slice(0, 30);
 
     const topCandles: Record<string, typeof candles[string]> = {};
     for (const { ticker } of scored) {

@@ -168,7 +168,7 @@ export async function analyzeCandlesWithClaude(
     });
 
   const focusSection = focusDirections.length > 0
-    ? `\nSCAN FOCUS: The user has requested emphasis on: ${focusDirections.join(', ')}. Prioritize setups matching these direction types. You may still include other directions if they are genuinely exceptional (confidence ≥ 85), but the majority of your output should favor the requested types. If no qualifying setups exist for the requested types, return the best available setups regardless of direction.\n`
+    ? `\nSCAN FOCUS (STRICT): Return ONLY setups where direction is one of: ${focusDirections.join(', ')}. Do NOT include any other direction types — no exceptions. Within the allowed direction(s), be thorough: return every setup that clears the mandatory quality filters and confidence floor. Do not self-limit to 3-5 picks — if 8 LONG setups qualify, return all 8. The user wants maximum coverage for the selected type(s).\n`
     : '';
 
   const userMessage = `Analysis date: ${new Date().toISOString().split('T')[0]}
@@ -194,6 +194,11 @@ Analyze the above data and return your swing trade recommendations as a JSON arr
     const rawText = message.content[0].type === 'text' ? message.content[0].text : '';
     const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleaned) as TradeRecommendation[];
+
+    // Hard enforce focus directions — strip any that slipped through
+    if (focusDirections.length > 0) {
+      return parsed.filter(r => focusDirections.includes(r.direction));
+    }
     return parsed;
   } catch (err) {
     console.error('Claude scan error:', err);

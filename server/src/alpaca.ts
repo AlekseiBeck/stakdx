@@ -12,11 +12,20 @@ export const SP500_TICKERS = [
 ];
 
 export const NON_SP500_TICKERS = [
-  'SPY', 'QQQ', 'IWM',
-  'PLTR', 'COIN', 'MSTR',
-  'SHOP', 'SNOW', 'DDOG', 'NET',
-  'ARM', 'MRVL', 'SMCI',
-  'RIVN', 'HOOD', 'RBLX', 'SNAP',
+  // ETFs (market regime anchors)
+  'SPY', 'QQQ', 'IWM', 'SOXS', 'TQQQ',
+  // High-vol growth / momentum
+  'PLTR', 'COIN', 'MSTR', 'HOOD', 'RBLX', 'SNAP',
+  // Cloud / SaaS
+  'SHOP', 'SNOW', 'DDOG', 'NET', 'GTLB', 'BILL', 'HUBS',
+  // Semis (non-S&P)
+  'ARM', 'MRVL', 'SMCI', 'WOLF',
+  // EV / clean energy
+  'RIVN', 'LCID', 'NIO', 'CHPT',
+  // Biotech / speculative
+  'MRNA', 'BNTX', 'SGEN',
+  // Crypto-adjacent / fintech
+  'RIOT', 'MARA', 'SOFI', 'AFRM',
 ];
 
 const WATCHLIST = [...SP500_TICKERS, ...NON_SP500_TICKERS];
