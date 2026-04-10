@@ -8,17 +8,17 @@
   }
 
   body {
-    @apply bg-[#0a0e1a] text-gray-100;
+    @apply bg-[#070b14] text-gray-100;
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-[#0f1629];
+    @apply bg-[#0a0e1a];
   }
   ::-webkit-scrollbar-thumb {
     @apply bg-[#1e2a4a] rounded-full;
@@ -30,7 +30,11 @@
 
 @layer components {
   .card {
-    @apply bg-[#0f1629] border border-[#1a2442] rounded-xl;
+    @apply bg-[#0d1424] border border-[#16213a] rounded-xl;
+  }
+
+  .card-elevated {
+    @apply bg-[#101828] border border-[#1a2748] rounded-xl shadow-lg;
   }
 
   .badge-long {
@@ -39,6 +43,14 @@
 
   .badge-short {
     @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-900/50 text-red-400 border border-red-700/50;
+  }
+
+  .badge-call {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-900/50 text-blue-400 border border-blue-700/50;
+  }
+
+  .badge-put {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-900/50 text-purple-400 border border-purple-700/50;
   }
 
   .badge-hold {
@@ -58,11 +70,29 @@
   }
 
   .btn-ghost {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-[#1a2442] hover:bg-[#1e2a4a] text-gray-300 font-medium rounded-lg transition-all duration-150 active:scale-95 text-sm border border-[#243255];
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-[#161f36] hover:bg-[#1e2a4a] text-gray-300 font-medium rounded-lg transition-all duration-150 active:scale-95 text-sm border border-[#1e2d4d];
   }
 
   .mono {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+
+  /* Mode pill toggle */
+  .mode-pill {
+    @apply flex items-center bg-[#0d1424] border border-[#16213a] rounded-lg p-0.5 gap-0.5;
+  }
+
+  .mode-pill-btn {
+    @apply px-4 py-1.5 rounded-md text-xs font-bold tracking-wider transition-all duration-150 cursor-pointer select-none;
+  }
+
+  .mode-pill-btn-inactive {
+    @apply text-gray-500 hover:text-gray-300;
+  }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    @apply bg-[#161f36] rounded animate-pulse;
   }
 }
 
@@ -92,7 +122,7 @@
   animation: pulse-dot 2s ease-in-out infinite;
 }
 
-/* Scan button spin */
+/* Spin animation */
 @keyframes spin-slow {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -101,3 +131,24 @@
 .spin-slow {
   animation: spin-slow 1s linear infinite;
 }
+
+/* Card fade-in */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.35s ease-out forwards;
+}
+
+/* Stagger delay helpers */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }

@@ -1,6 +1,27 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Candle, TradeRecommendation, NewsItem, PositionUpdate, Position } from './types';
-import { summarizeCandles } from './alpaca';
+import { summarizeCandles, summarizeIntradayCandles } from './alpaca';
+import type { FinnhubNewsItem, EarningsEvent } from './finnhub';
+
+// StockTwits sentiment shape (from alpaca.fetchStockTwitsSentiment)
+type StockTwitsSentimentEntry = {
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+  bullCount: number;
+  bearCount: number;
+  total: number;
+};
+
+// Broad sentiment map type accepted by analyzeCandlesWithClaude — supports both
+// the old Claude-based shape (signal string) and the new StockTwits shape (counts).
+type SentimentEntry = {
+  sentiment: string;
+  signal?: string;
+  bullCount?: number;
+  bearCount?: number;
+  total?: number;
+};
+
+type SentimentMap = Record<string, SentimentEntry>;
 
 function buildScanPrompt(buyingPower: number | null): string {
   const hasBP = buyingPower && buyingPower > 0;
@@ -69,6 +90,8 @@ Adjustments:
 • Macro news bullish (rate cuts, stimulus, strong GDP): apply bullish bias, reduce short confidence −5
 • SPY/QQQ candles show clear 3-5 day downtrend: reduce all long confidence −8, increase short confidence +8
 • SPY/QQQ candles show clear 3-5 day uptrend: reduce all short confidence −8, increase long confidence +8
+• Social sentiment bullish for ticker: +5 confidence for LONG/CALL setups
+• Social sentiment bearish for ticker: +5 confidence for SHORT/PUT setups, −5 for LONG/CALL
 
 ━━━ OPTIONS vs STOCK GUIDANCE ━━━
 Use CALL or PUT when:
@@ -144,20 +167,114 @@ function hasAnthropicKey(): boolean {
     process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key_here');
 }
 
+// Build the StockTwits sentiment section for the Claude prompt
+function buildStockTwitsSection(
+  sentiment: Record<string, StockTwitsSentimentEntry>
+): string {
+  const entries = Object.entries(sentiment);
+  if (entries.length === 0) return '';
+
+  const lines = entries.map(([ticker, s]) => {
+    const bullPct = s.total > 0 ? Math.round((s.bullCount / s.total) * 100) : 0;
+    const label = s.sentiment.toUpperCase();
+    return `${ticker}: ${label} ${s.bullCount}🟢 / ${s.bearCount}🔴 (${bullPct}% bull, ${s.total} votes)`;
+  });
+
+  return `
+SOCIAL SENTIMENT (StockTwits real-time — last 30 messages per ticker):
+${lines.join('\n')}
+Confidence adjustment: add +5 when social aligns with technical signal, -5 when contradicts.
+`;
+}
+
+// Build the Finnhub news section for the Claude prompt
+function buildFinnhubNewsSection(finnhubNews: FinnhubNewsItem[]): string {
+  if (finnhubNews.length === 0) return '';
+
+  const now = Date.now() / 1000; // unix seconds
+  const lines = finnhubNews.slice(0, 15).map(item => {
+    const ageHours = Math.round((now - item.datetime) / 3600);
+    const age = ageHours < 1 ? '<1h ago' : `${ageHours}h ago`;
+    return `[${item.ticker}] "${item.headline}" — ${item.source} (${age})`;
+  });
+
+  return `
+FINNHUB NEWS (last 72h, multi-source):
+${lines.join('\n')}
+`;
+}
+
+// Build the earnings risk section for the Claude prompt
+function buildEarningsSection(earningsEvents: EarningsEvent[]): string {
+  if (earningsEvents.length === 0) return '';
+
+  const lines = earningsEvents.map(e => {
+    const epsStr = e.epsEstimate != null ? ` | EPS est: $${e.epsEstimate}` : '';
+    const revStr = e.revenueEstimate != null
+      ? ` | Rev est: $${(e.revenueEstimate / 1e9).toFixed(1)}B`
+      : '';
+    return `${e.ticker}: reports ${e.date}${epsStr}${revStr}`;
+  });
+
+  return `
+EARNINGS WITHIN 7 DAYS — HIGH RISK:
+${lines.join('\n')}
+These tickers carry elevated IV and gap risk. For options plays, note IV crush post-earnings.
+For stock plays, tighten stops or size down 50% if holding through earnings.
+`;
+}
+
+// Build the intraday context section for the Claude prompt
+function buildIntradaySection(intradayData: Record<string, Candle[]>): string {
+  const entries = Object.entries(intradayData).filter(([, c]) => c.length > 0);
+  if (entries.length === 0) return '';
+
+  const lines = entries.map(([ticker, candles]) =>
+    summarizeIntradayCandles(ticker, candles)
+  );
+
+  return `
+INTRADAY CONTEXT (1h bars, last 2 trading days):
+${lines.join('\n')}
+Use this for precise entry timing — daily candles show the setup, intraday shows current momentum.
+`;
+}
+
+// Build the legacy/generic sentiment section for the Claude prompt
+// Handles both StockTwits shape (bullCount/bearCount) and old signal-string shape
+function buildGenericSentimentSection(sentiment: SentimentMap): string {
+  const entries = Object.entries(sentiment);
+  if (entries.length === 0) return '';
+
+  const lines = entries.map(([ticker, s]) => {
+    if (s.bullCount != null && s.bearCount != null && s.total != null) {
+      const bullPct = s.total > 0 ? Math.round((s.bullCount / s.total) * 100) : 0;
+      return `${ticker}: ${s.sentiment.toUpperCase()} ${s.bullCount}🟢 / ${s.bearCount}🔴 (${bullPct}% bull, ${s.total} votes)`;
+    }
+    return `${ticker}: ${s.sentiment}${s.signal ? ` — ${s.signal}` : ''}`;
+  });
+
+  return `
+SOCIAL SENTIMENT (StockTwits real-time — last 30 messages per ticker):
+${lines.join('\n')}
+Confidence adjustment: add +5 when social aligns with technical signal, -5 when contradicts.
+`;
+}
+
 export async function analyzeCandlesWithClaude(
   candleData: Record<string, Candle[]>,
   news: NewsItem[],
   marketNews: NewsItem[],
   buyingPower: number | null = null,
-  focusDirections: string[] = []
+  focusDirections: string[] = [],
+  sentiment: SentimentMap = {},
+  finnhubNews: FinnhubNewsItem[] = [],
+  earningsEvents: EarningsEvent[] = [],
+  intradayData: Record<string, Candle[]> = {}
 ): Promise<TradeRecommendation[] | null> {
   if (!hasAnthropicKey()) return null;
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const stockSummaries = Object.entries(candleData)
-    .map(([ticker, candles]) => summarizeCandles(ticker, candles))
-    .join('\n');
 
   const allNews = [...news, ...marketNews]
     .filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i)
@@ -171,8 +288,24 @@ export async function analyzeCandlesWithClaude(
     ? `\nSCAN FOCUS (STRICT): Return ONLY setups where direction is one of: ${focusDirections.join(', ')}. Do NOT include any other direction types — no exceptions. Within the allowed direction(s), be thorough: return every setup that clears the mandatory quality filters and confidence floor. Do not self-limit to 3-5 picks — if 8 LONG setups qualify, return all 8. The user wants maximum coverage for the selected type(s).\n`
     : '';
 
-  const userMessage = `Analysis date: ${new Date().toISOString().split('T')[0]}
-Stocks to analyze: ${Object.keys(candleData).length}
+  const sentimentSection = buildGenericSentimentSection(sentiment);
+  const finnhubSection = buildFinnhubNewsSection(finnhubNews);
+  const earningsSection = buildEarningsSection(earningsEvents);
+  const intradaySection = buildIntradaySection(intradayData);
+
+  // Split candle data into two halves for parallel Claude calls
+  const entries = Object.entries(candleData);
+  const midpoint = Math.ceil(entries.length / 2);
+  const batch1Entries = entries.slice(0, midpoint);
+  const batch2Entries = entries.slice(midpoint);
+
+  const buildUserMessage = (batchEntries: [string, Candle[]][]) => {
+    const stockSummaries = batchEntries
+      .map(([ticker, candles]) => summarizeCandles(ticker, candles))
+      .join('\n');
+
+    return `Analysis date: ${new Date().toISOString().split('T')[0]}
+Stocks to analyze: ${batchEntries.length}
 ${buyingPower ? `Buying power: $${buyingPower.toLocaleString()}` : ''}
 ${focusSection}
 STOCK CANDLE DATA (5 days each):
@@ -180,7 +313,113 @@ ${stockSummaries}
 
 RECENT NEWS (ticker-specific + broad market):
 ${allNews.join('\n')}
+${sentimentSection}${finnhubSection}${earningsSection}${intradaySection}
+Analyze the above data and return your swing trade recommendations as a JSON array.`;
+  };
 
+  const systemPrompt = buildScanPrompt(buyingPower);
+
+  try {
+    const [result1, result2] = await Promise.all([
+      client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: buildUserMessage(batch1Entries) }],
+      }),
+      batch2Entries.length > 0
+        ? client.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 8192,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: buildUserMessage(batch2Entries) }],
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const parseResult = (msg: Anthropic.Message | null): TradeRecommendation[] => {
+      if (!msg) return [];
+      const rawText = msg.content[0].type === 'text' ? msg.content[0].text : '';
+      const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      try {
+        return JSON.parse(cleaned) as TradeRecommendation[];
+      } catch {
+        return [];
+      }
+    };
+
+    const batch1Results = parseResult(result1);
+    const batch2Results = parseResult(result2);
+
+    // Merge, deduplicate by ticker, sort by confidence descending
+    const merged = [...batch1Results, ...batch2Results];
+    const seen = new Set<string>();
+    const deduped = merged.filter((r) => {
+      if (seen.has(r.ticker)) return false;
+      seen.add(r.ticker);
+      return true;
+    });
+
+    const sorted = deduped.sort((a, b) => b.confidence - a.confidence);
+
+    // Hard enforce focus directions — strip any that slipped through
+    if (focusDirections.length > 0) {
+      return sorted.filter(r => focusDirections.includes(r.direction));
+    }
+    return sorted;
+  } catch (err) {
+    console.error('Claude scan error:', err);
+    return null;
+  }
+}
+
+// Analyze a pre-split batch — used by SSE streaming endpoint.
+export async function analyzeBatchWithClaude(
+  batchEntries: [string, Candle[]][],
+  news: NewsItem[],
+  marketNews: NewsItem[],
+  buyingPower: number | null,
+  focusDirections: string[],
+  sentiment: SentimentMap,
+  finnhubNews: FinnhubNewsItem[] = [],
+  earningsEvents: EarningsEvent[] = [],
+  intradayData: Record<string, Candle[]> = {}
+): Promise<TradeRecommendation[]> {
+  if (!hasAnthropicKey() || batchEntries.length === 0) return [];
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const allNews = [...news, ...marketNews]
+    .filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i)
+    .slice(0, 25)
+    .map((n) => {
+      const tickers = n.symbols.length ? `[${n.symbols.join(',')}]` : '[MARKET]';
+      return `${tickers} ${n.headline} — ${n.summary?.slice(0, 120) ?? ''} (${n.source})`;
+    });
+
+  const focusSection = focusDirections.length > 0
+    ? `\nSCAN FOCUS (STRICT): Return ONLY setups where direction is one of: ${focusDirections.join(', ')}. Do NOT include any other direction types — no exceptions.\n`
+    : '';
+
+  const sentimentSection = buildGenericSentimentSection(sentiment);
+  const finnhubSection = buildFinnhubNewsSection(finnhubNews);
+  const earningsSection = buildEarningsSection(earningsEvents);
+  const intradaySection = buildIntradaySection(intradayData);
+
+  const stockSummaries = batchEntries
+    .map(([ticker, candles]) => summarizeCandles(ticker, candles))
+    .join('\n');
+
+  const userMessage = `Analysis date: ${new Date().toISOString().split('T')[0]}
+Stocks to analyze: ${batchEntries.length}
+${buyingPower ? `Buying power: $${buyingPower.toLocaleString()}` : ''}
+${focusSection}
+STOCK CANDLE DATA (5 days each):
+${stockSummaries}
+
+RECENT NEWS (ticker-specific + broad market):
+${allNews.join('\n')}
+${sentimentSection}${finnhubSection}${earningsSection}${intradaySection}
 Analyze the above data and return your swing trade recommendations as a JSON array.`;
 
   try {
@@ -195,14 +434,13 @@ Analyze the above data and return your swing trade recommendations as a JSON arr
     const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleaned) as TradeRecommendation[];
 
-    // Hard enforce focus directions — strip any that slipped through
     if (focusDirections.length > 0) {
       return parsed.filter(r => focusDirections.includes(r.direction));
     }
     return parsed;
   } catch (err) {
-    console.error('Claude scan error:', err);
-    return null;
+    console.error('Claude batch scan error:', err);
+    return [];
   }
 }
 

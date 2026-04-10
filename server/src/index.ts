@@ -1,12 +1,25 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { fetchCandles, fetchCandlesForTicker, fetchNews, fetchNewsForTicker, fetchLatestPrices, fetchMarketNews, scoreTicker } from './alpaca';
-import { analyzeCandlesWithClaude, analyzePositionWithClaude } from './claude';
+import {
+  fetchCandles,
+  fetchCandlesForTicker,
+  fetchNews,
+  fetchNewsForTicker,
+  fetchLatestPrices,
+  fetchMarketNews,
+  scoreTicker,
+  scoreTickerForMode,
+  fetchStockTwitsSentiment,
+  fetchIntradayCandles,
+} from './alpaca';
+import { analyzeCandlesWithClaude, analyzeBatchWithClaude, analyzePositionWithClaude } from './claude';
+import { fetchFinnhubNews, fetchUpcomingEarnings } from './finnhub';
 import { MOCK_RECOMMENDATIONS, MOCK_NEWS, MOCK_POSITION_UPDATE } from './mockData';
 import { requireAuth, AuthRequest } from './auth';
 import { hasDatabase, getPositions, createPosition, deletePosition, findPositionByTicker } from './db';
 import { Position } from './types';
+import { WATCHLIST } from './alpaca';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
@@ -27,22 +40,26 @@ app.get('/api/scan', requireAuth, async (req, res) => {
   const focusDirections = req.query.directions
     ? (req.query.directions as string).split(',').map(d => d.trim().toUpperCase()).filter(Boolean)
     : [];
+  const mode = (req.query.mode as string | undefined) ?? 'both';
+  const scanMode = (mode === 'long' || mode === 'short') ? mode : 'both';
 
   try {
-    const [candles, news, marketNews, prices] = await Promise.all([
+    const [candles, news, marketNews, prices, finnhubNewsData, earningsData] = await Promise.all([
       fetchCandles(),
       fetchNews(),
       fetchMarketNews(),
       fetchLatestPrices(),
+      fetchFinnhubNews(WATCHLIST.filter(t => !['SPY','QQQ','IWM','DIA','XLK','XLF','XLE','XLV','XLC','XLRE','XLI','XLU','XLB','XLP','XLY','TQQQ','SQQQ','SOXS','SOXL','TNA','TZA'].includes(t)).slice(0, 10)),
+      fetchUpcomingEarnings(WATCHLIST),
     ]);
 
     if (!candles) {
       return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: {}, mock: true });
     }
 
-    // Pre-filter: score all tickers and keep top 20 by technical signal strength
+    // Pre-filter: score all tickers using mode-aware scoring, keep top 30
     const scored = Object.entries(candles)
-      .map(([ticker, c]) => ({ ticker, score: scoreTicker(c) }))
+      .map(([ticker, c]) => ({ ticker, score: scoreTickerForMode(c, scanMode) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 30);
 
@@ -51,10 +68,28 @@ app.get('/api/scan', requireAuth, async (req, res) => {
       topCandles[ticker] = candles[ticker];
     }
 
-    console.log(`[scan] Pre-filtered ${Object.keys(candles).length} tickers → top ${scored.length}: ${scored.map(s => s.ticker).join(', ')}`);
+    console.log(`[scan] mode=${scanMode} Pre-filtered ${Object.keys(candles).length} tickers → top ${scored.length}: ${scored.map(s => s.ticker).join(', ')}`);
+
+    const topTickers = scored.map(s => s.ticker);
+
+    // Fetch StockTwits sentiment and intraday candles for top tickers
+    const [stockTwitsSentiment, intradayCandles] = await Promise.all([
+      fetchStockTwitsSentiment(topTickers.slice(0, 15)),
+      fetchIntradayCandles(topTickers.slice(0, 20)),
+    ]);
 
     const newsItems = news ?? MOCK_NEWS;
-    const recommendations = await analyzeCandlesWithClaude(topCandles, newsItems, marketNews, buyingPower, focusDirections);
+    const recommendations = await analyzeCandlesWithClaude(
+      topCandles,
+      newsItems,
+      marketNews,
+      buyingPower,
+      focusDirections,
+      stockTwitsSentiment,
+      finnhubNewsData,
+      earningsData,
+      intradayCandles ?? {}
+    );
 
     if (!recommendations) {
       return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: prices ?? {}, mock: true });
@@ -64,6 +99,114 @@ app.get('/api/scan', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[scan] Error:', err);
     return res.status(500).json({ recommendations: MOCK_RECOMMENDATIONS, mock: true });
+  }
+});
+
+// GET /api/scan/stream — SSE streaming endpoint
+app.get('/api/scan/stream', requireAuth, async (req: AuthRequest, res) => {
+  const buyingPower = req.query.buyingPower ? parseFloat(req.query.buyingPower as string) : null;
+  const focusDirections = req.query.directions
+    ? (req.query.directions as string).split(',').map(d => d.trim().toUpperCase()).filter(Boolean)
+    : [];
+  const mode = (req.query.mode as string | undefined) ?? 'both';
+  const scanMode = (mode === 'long' || mode === 'short') ? mode : 'both';
+
+  // Set SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (data: object) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const [candles, news, marketNews, prices, finnhubNewsData, earningsData] = await Promise.all([
+      fetchCandles(),
+      fetchNews(),
+      fetchMarketNews(),
+      fetchLatestPrices(),
+      fetchFinnhubNews(WATCHLIST.filter(t => !['SPY','QQQ','IWM','DIA','XLK','XLF','XLE','XLV','XLC','XLRE','XLI','XLU','XLB','XLP','XLY','TQQQ','SQQQ','SOXS','SOXL','TNA','TZA'].includes(t)).slice(0, 10)),
+      fetchUpcomingEarnings(WATCHLIST),
+    ]);
+
+    if (!candles) {
+      sendEvent({ recommendations: MOCK_RECOMMENDATIONS, done: true, prices: {}, mock: true });
+      res.end();
+      return;
+    }
+
+    // Pre-filter with mode-aware scoring
+    const scored = Object.entries(candles)
+      .map(([ticker, c]) => ({ ticker, score: scoreTickerForMode(c, scanMode) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 30);
+
+    const topTickers = scored.map(s => s.ticker);
+
+    console.log(`[scan/stream] mode=${scanMode} Pre-filtered ${Object.keys(candles).length} tickers → top ${scored.length}`);
+
+    // Fetch StockTwits sentiment and intraday candles for top tickers
+    const [stockTwitsSentiment, intradayCandles] = await Promise.all([
+      fetchStockTwitsSentiment(topTickers.slice(0, 15)),
+      fetchIntradayCandles(topTickers.slice(0, 20)),
+    ]);
+
+    const newsItems = news ?? MOCK_NEWS;
+    const intradayMap = intradayCandles ?? {};
+
+    // Split top stocks into two batches
+    const midpoint = Math.ceil(topTickers.length / 2);
+    const batch1Tickers = topTickers.slice(0, midpoint);
+    const batch2Tickers = topTickers.slice(midpoint);
+
+    const batch1Entries: [string, typeof candles[string]][] = batch1Tickers.map(t => [t, candles[t]]);
+    const batch2Entries: [string, typeof candles[string]][] = batch2Tickers.map(t => [t, candles[t]]);
+
+    // Build per-batch intraday slices so each batch only gets its own tickers
+    const batch1Intraday: Record<string, typeof intradayMap[string]> = {};
+    for (const t of batch1Tickers) {
+      if (intradayMap[t]) batch1Intraday[t] = intradayMap[t];
+    }
+    const batch2Intraday: Record<string, typeof intradayMap[string]> = {};
+    for (const t of batch2Tickers) {
+      if (intradayMap[t]) batch2Intraday[t] = intradayMap[t];
+    }
+
+    // Fire batch 1
+    const batch1Results = await analyzeBatchWithClaude(
+      batch1Entries,
+      newsItems,
+      marketNews,
+      buyingPower,
+      focusDirections,
+      stockTwitsSentiment,
+      finnhubNewsData,
+      earningsData,
+      batch1Intraday
+    );
+    sendEvent({ recommendations: batch1Results, done: false });
+
+    // Fire batch 2
+    const batch2Results = await analyzeBatchWithClaude(
+      batch2Entries,
+      newsItems,
+      marketNews,
+      buyingPower,
+      focusDirections,
+      stockTwitsSentiment,
+      finnhubNewsData,
+      earningsData,
+      batch2Intraday
+    );
+    sendEvent({ recommendations: batch2Results, done: true, prices: prices ?? {} });
+
+    res.end();
+  } catch (err) {
+    console.error('[scan/stream] Error:', err);
+    sendEvent({ recommendations: MOCK_RECOMMENDATIONS, done: true, prices: {}, mock: true });
+    res.end();
   }
 });
 
@@ -187,5 +330,6 @@ app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Alpaca keys: ${process.env.ALPACA_API_KEY ? 'SET' : 'NOT SET'}`);
   console.log(`Anthropic key: ${process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT SET'}`);
+  console.log(`Finnhub key: ${process.env.FINNHUB_API_KEY ? 'SET' : 'NOT SET'}`);
   console.log(`Supabase: ${hasDatabase() ? 'SET' : 'NOT SET (using in-memory fallback)'}`);
 });

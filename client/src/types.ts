@@ -11,6 +11,11 @@ export interface TradeRecommendation {
   positionSize: string;
   maxRisk: string;
   potentialGain: string;
+  socialSentiment?: {
+    sentiment: 'bullish' | 'bearish' | 'neutral';
+    signal: string;
+  };
+  mode?: 'long' | 'short' | 'both';
 }
 
 export interface NewsItem {
@@ -37,3 +42,5 @@ export interface PositionUpdate {
   currentPrice: string;
   priceChange: string;
 }
+
+export type ScanMode = 'long' | 'both' | 'short';

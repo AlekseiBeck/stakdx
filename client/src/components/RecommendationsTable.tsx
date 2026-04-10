@@ -1,281 +1,144 @@
 import React, { useState } from 'react';
 import { TradeRecommendation } from '../types';
+import RecommendationCard from './RecommendationCard';
 
 interface Props {
   recommendations: TradeRecommendation[];
   prices: Record<string, number>;
   onAddPosition: (rec: TradeRecommendation) => void;
+  isStreaming?: boolean;
+  streamPhase?: 'idle' | 'batch1' | 'batch2' | 'done';
 }
 
-function ConfidenceBar({ value }: { value: number }) {
-  const color =
-    value >= 80 ? 'bg-emerald-500' :
-    value >= 65 ? 'bg-blue-500' :
-    value >= 50 ? 'bg-amber-500' : 'bg-red-500';
-
+function SkeletonCard() {
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-[#1a2442] rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-700 ${color}`}
-          style={{ width: `${value}%` }}
-        />
+    <div className="card-elevated p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="skeleton w-16 h-6 rounded" />
+          <div className="skeleton w-12 h-5 rounded-full" />
+        </div>
+        <div className="skeleton w-10 h-6 rounded" />
       </div>
-      <span className="mono text-xs font-semibold text-gray-300 w-8 text-right">{value}%</span>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="skeleton h-12 rounded-lg" />
+        <div className="skeleton h-12 rounded-lg" />
+        <div className="skeleton h-12 rounded-lg" />
+      </div>
+      <div className="flex gap-2">
+        <div className="skeleton w-32 h-5 rounded" />
+        <div className="skeleton w-16 h-5 rounded" />
+      </div>
     </div>
   );
 }
 
-type SortDir = 'default' | 'desc' | 'asc';
+export default function RecommendationsTable({
+  recommendations,
+  prices,
+  onAddPosition,
+  isStreaming = false,
+  streamPhase = 'idle',
+}: Props) {
+  const [dirFilter, setDirFilter] = useState<Set<string>>(new Set(['LONG', 'SHORT', 'CALL', 'PUT']));
 
-export default function RecommendationsTable({ recommendations, prices, onAddPosition }: Props) {
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [sortDir, setSortDir] = useState<SortDir>('default');
-
-  const sortedRecs = [...recommendations].sort((a, b) => {
-    if (sortDir === 'desc') return b.confidence - a.confidence;
-    if (sortDir === 'asc') return a.confidence - b.confidence;
-    return 0;
-  });
-
-  const cycleSort = () => {
-    setSortDir((prev) => prev === 'default' ? 'desc' : prev === 'desc' ? 'asc' : 'default');
-  };
-
-  const toggleRow = (ticker: string) => {
-    setExpandedRows((prev) => {
+  const toggleDir = (d: string) => {
+    setDirFilter((prev) => {
       const next = new Set(prev);
-      if (next.has(ticker)) next.delete(ticker);
-      else next.add(ticker);
+      if (next.has(d)) {
+        if (next.size === 1) return prev;
+        next.delete(d);
+      } else {
+        next.add(d);
+      }
       return next;
     });
   };
 
-  if (recommendations.length === 0) {
+  const filtered = recommendations.filter((r) => dirFilter.has(r.direction));
+
+  // Show skeletons while streaming
+  if (isStreaming && recommendations.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm text-blue-400">
+          <svg className="w-4 h-4 spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Analyzing batch 1...
+        </div>
+        {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
+      </div>
+    );
+  }
+
+  if (!isStreaming && recommendations.length === 0) {
     return (
       <div className="card p-12 text-center">
-        <div className="w-16 h-16 rounded-full bg-[#1a2442] flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 rounded-full bg-[#161f36] flex items-center justify-center mx-auto mb-4">
           <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
           </svg>
         </div>
         <p className="text-gray-400 font-medium">No scan results yet</p>
-        <p className="text-gray-600 text-sm mt-1">Click "Run Daily Scan" to analyze the market</p>
+        <p className="text-gray-600 text-sm mt-1">Run a scan to analyze the market</p>
       </div>
     );
   }
 
   return (
-    <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-[#1a2442]">
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-10">#</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Ticker</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Direction</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider min-w-[140px]">
-                <button onClick={cycleSort} className="flex items-center gap-1.5 text-gray-500 hover:text-blue-400 transition-colors group">
-                  Confidence
-                  <span className="flex flex-col leading-none">
-                    <svg className={`w-2.5 h-2.5 transition-colors ${sortDir === 'asc' ? 'text-blue-400' : 'text-gray-600 group-hover:text-gray-400'}`} fill="currentColor" viewBox="0 0 10 6">
-                      <path d="M5 0L10 6H0z"/>
-                    </svg>
-                    <svg className={`w-2.5 h-2.5 transition-colors ${sortDir === 'desc' ? 'text-blue-400' : 'text-gray-600 group-hover:text-gray-400'}`} fill="currentColor" viewBox="0 0 10 6">
-                      <path d="M5 6L0 0H10z"/>
-                    </svg>
-                  </span>
-                </button>
-              </th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Entry Zone</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Stop Loss</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Target</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Timeframe</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Price</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Pattern</th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-12"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedRecs.map((rec, idx) => {
-              const isExpanded = expandedRows.has(rec.ticker);
-              return (
-                <React.Fragment key={rec.ticker}>
-                  <tr
-                    className={`border-b border-[#1a2442]/60 hover:bg-[#141d35] transition-colors cursor-pointer group ${isExpanded ? 'bg-[#141d35]' : ''}`}
-                    onClick={() => toggleRow(rec.ticker)}
-                  >
-                    <td className="px-4 py-3.5">
-                      <span className="mono text-sm font-bold text-gray-600">{idx + 1}</span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="mono font-bold text-base text-white">{rec.ticker}</span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {rec.direction === 'LONG' && (
-                        <span className="badge-long">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-                          </svg>
-                          LONG
-                        </span>
-                      )}
-                      {rec.direction === 'SHORT' && (
-                        <span className="badge-short">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
-                          </svg>
-                          SHORT
-                        </span>
-                      )}
-                      {rec.direction === 'CALL' && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-900/50 text-blue-400 border border-blue-700/50">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-                          </svg>
-                          CALL
-                        </span>
-                      )}
-                      {rec.direction === 'PUT' && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-900/50 text-purple-400 border border-purple-700/50">
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
-                          </svg>
-                          PUT
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 min-w-[140px]">
-                      <ConfidenceBar value={rec.confidence} />
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="mono text-sm text-cyan-400 font-medium">{rec.entryZone}</span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="mono text-sm text-red-400 font-medium">{rec.stopLoss}</span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="mono text-sm text-emerald-400 font-medium">{rec.target}</span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="text-sm text-gray-400">{rec.timeframe}</span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {prices[rec.ticker] ? (
-                        <span className="mono text-sm font-semibold text-white">${prices[rec.ticker].toFixed(2)}</span>
-                      ) : (
-                        <span className="text-gray-600 text-sm">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="text-xs text-gray-400 bg-[#1a2442] px-2 py-0.5 rounded">{rec.pattern}</span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <svg
-                        className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                      </svg>
-                    </td>
-                  </tr>
+    <div className="space-y-3">
+      {/* Streaming status */}
+      {isStreaming && (
+        <div className="flex items-center gap-2 text-sm text-blue-400">
+          <svg className="w-4 h-4 spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {streamPhase === 'batch1' ? 'Analyzing batch 1... more results coming' : 'Analyzing batch 2...'}
+        </div>
+      )}
 
-                  {isExpanded && (
-                    <tr className="bg-[#0d1424]">
-                      <td colSpan={11} className="px-6 py-5">
-                        <div className="space-y-4">
-                          {/* Exit Goal + Stop Loss cards */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            {/* Entry */}
-                            <div className="bg-[#141d35] border border-[#1a2442] rounded-xl p-4">
-                              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Entry Zone</div>
-                              <div className="mono text-lg font-bold text-cyan-400">{rec.entryZone}</div>
-                              <div className="text-xs text-gray-500 mt-1">{rec.timeframe} hold</div>
-                              {rec.positionSize && (
-                                <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-[#1a2442]">
-                                  <span className="text-gray-600">Size: </span>{rec.positionSize}
-                                </div>
-                              )}
-                            </div>
-                            {/* Exit Goal */}
-                            <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-4">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-                                </svg>
-                                <div className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Exit Goal — Take Profit</div>
-                              </div>
-                              <div className="mono text-lg font-bold text-emerald-400">{rec.target}</div>
-                              <div className="text-xs text-emerald-600 mt-1">
-                                {(() => {
-                                  const entryNum = parseFloat(rec.entryZone.replace(/[^0-9.]/g, ''));
-                                  const targetNum = parseFloat(rec.target.replace(/[^0-9.]/g, ''));
-                                  if (!entryNum || !targetNum) return null;
-                                  const pct = (((targetNum - entryNum) / entryNum) * 100 * (rec.direction === 'SHORT' || rec.direction === 'PUT' ? -1 : 1)).toFixed(1);
-                                  return `~${pct}% potential gain`;
-                                })()}
-                              </div>
-                              {rec.potentialGain && (
-                                <div className="text-xs text-emerald-500 font-semibold mt-1">{rec.potentialGain} est. profit</div>
-                              )}
-                            </div>
-                            {/* Stop Loss */}
-                            <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4">
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <svg className="w-3 h-3 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
-                                </svg>
-                                <div className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">Stop Loss — Max Risk</div>
-                              </div>
-                              <div className="mono text-lg font-bold text-red-400">{rec.stopLoss}</div>
-                              <div className="text-xs text-red-700 mt-1">
-                                {(() => {
-                                  const entryNum = parseFloat(rec.entryZone.replace(/[^0-9.]/g, ''));
-                                  const stopNum = parseFloat(rec.stopLoss.replace(/[^0-9.]/g, ''));
-                                  if (!entryNum || !stopNum) return null;
-                                  const pct = Math.abs(((stopNum - entryNum) / entryNum) * 100).toFixed(1);
-                                  return `~${pct}% max downside`;
-                                })()}
-                              </div>
-                              {rec.maxRisk && (
-                                <div className="text-xs text-red-600 font-semibold mt-1">{rec.maxRisk} max loss</div>
-                              )}
-                            </div>
-                          </div>
+      {/* Direction filter pills */}
+      {recommendations.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-600 font-medium">Filter:</span>
+          {(['LONG', 'SHORT', 'CALL', 'PUT'] as const).map((d) => {
+            const colorMap = {
+              LONG: 'border-emerald-600 text-emerald-400 bg-emerald-900/40',
+              SHORT: 'border-red-600 text-red-400 bg-red-900/40',
+              CALL: 'border-blue-600 text-blue-400 bg-blue-900/40',
+              PUT: 'border-purple-600 text-purple-400 bg-purple-900/40',
+            };
+            const count = recommendations.filter(r => r.direction === d).length;
+            if (count === 0) return null;
+            return (
+              <button
+                key={d}
+                onClick={() => toggleDir(d)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                  dirFilter.has(d)
+                    ? colorMap[d]
+                    : 'border-[#16213a] text-gray-600 hover:text-gray-400'
+                }`}
+              >
+                {d} <span className="opacity-60 font-normal">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-                          {/* AI Rationale + Track button */}
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                                </svg>
-                                <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">AI Rationale</span>
-                              </div>
-                              <p className="text-sm text-gray-300 leading-relaxed">{rec.rationale}</p>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onAddPosition(rec);
-                              }}
-                              className="btn-ghost flex-shrink-0"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                              </svg>
-                              Track Position
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* Card grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-1 xl:grid-cols-1 gap-3">
+        {filtered.map((rec, idx) => (
+          <RecommendationCard
+            key={rec.ticker}
+            rec={rec}
+            index={idx}
+            price={prices[rec.ticker]}
+            onAddPosition={onAddPosition}
+          />
+        ))}
       </div>
     </div>
   );
