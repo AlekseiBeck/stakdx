@@ -13,6 +13,9 @@ interface HeaderProps {
   onBuyingPowerChange: (v: string) => void;
   onScan: () => void;
   isScanning: boolean;
+  brokerageConnected: boolean;
+  onOpenConnectModal: () => void;
+  onOpenPaperPanel: () => void;
 }
 
 function getMarketSession(): 'open' | 'pre' | 'after' | 'closed' {
@@ -38,6 +41,9 @@ export default function Header({
   onBuyingPowerChange,
   onScan,
   isScanning,
+  brokerageConnected,
+  onOpenConnectModal,
+  onOpenPaperPanel,
 }: HeaderProps) {
   const [time, setTime] = useState(new Date());
   const session = getMarketSession();
@@ -154,6 +160,26 @@ export default function Header({
             </svg>
             Demo
           </span>
+        )}
+
+        {/* Brokerage status */}
+        {brokerageConnected ? (
+          <button
+            onClick={onOpenPaperPanel}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-800/50 bg-emerald-950/30 text-emerald-400 text-xs font-semibold hover:border-emerald-700 hover:bg-emerald-950/50 transition-all flex-shrink-0"
+            title="View paper account"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
+            Paper
+          </button>
+        ) : (
+          <button
+            onClick={onOpenConnectModal}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#1e3a5f] text-cyan-500 text-xs font-semibold hover:border-cyan-700/60 hover:text-cyan-400 transition-all flex-shrink-0"
+            title="Connect brokerage account"
+          >
+            Connect Broker
+          </button>
         )}
 
         {/* User menu */}

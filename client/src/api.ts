@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { TradeRecommendation, NewsItem, Position, PositionUpdate, ScanMode } from './types';
+import { TradeRecommendation, NewsItem, Position, PositionUpdate, ScanMode, BrokerageStatus, AlpacaAccount, AlpacaPosition, AlpacaOrder } from './types';
 
 const BASE = ((import.meta as Record<string, any>).env.VITE_API_URL ?? '') + '/api';
 
@@ -129,4 +129,62 @@ export async function getPositionUpdate(
   ticker: string
 ): Promise<{ update: PositionUpdate; mock: boolean }> {
   return get(`/positions/${ticker}/update`);
+}
+
+// Brokerage API
+
+export async function getBrokerageStatus(): Promise<BrokerageStatus> {
+  return get('/brokerage/status');
+}
+
+export async function connectBrokerage(
+  apiKey: string,
+  secretKey: string,
+  accountType: string
+): Promise<{ success: boolean; accountType: string }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${BASE}/brokerage/connect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ apiKey, secretKey, accountType }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? 'Failed to connect brokerage');
+  return data;
+}
+
+export async function disconnectBrokerage(): Promise<void> {
+  await del('/brokerage/disconnect');
+}
+
+export async function getBrokerageAccount(): Promise<{ account: AlpacaAccount }> {
+  return get('/brokerage/account');
+}
+
+export async function getBrokeragePositions(): Promise<{ positions: AlpacaPosition[]; orders: AlpacaOrder[] }> {
+  return get('/brokerage/positions');
+}
+
+export async function placeOrder(order: {
+  symbol: string;
+  qty: number;
+  side: 'buy' | 'sell';
+  type?: string;
+  limit_price?: number;
+}): Promise<{ order: AlpacaOrder }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${BASE}/brokerage/order`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(order),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? 'Order failed');
+  return data;
+}
+
+export async function cancelBrokerageOrder(orderId: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${BASE}/brokerage/order/${orderId}`, { method: 'DELETE', headers });
+  if (!res.ok) throw new Error('Failed to cancel order');
 }

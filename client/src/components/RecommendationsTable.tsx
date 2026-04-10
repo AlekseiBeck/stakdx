@@ -8,6 +8,8 @@ interface Props {
   onAddPosition: (rec: TradeRecommendation) => void;
   isStreaming?: boolean;
   streamPhase?: 'idle' | 'batch1' | 'batch2' | 'done';
+  brokerageConnected?: boolean;
+  onTradeExecuted?: () => void;
 }
 
 function SkeletonCard() {
@@ -39,6 +41,8 @@ export default function RecommendationsTable({
   onAddPosition,
   isStreaming = false,
   streamPhase = 'idle',
+  brokerageConnected = false,
+  onTradeExecuted,
 }: Props) {
   const [dirFilter, setDirFilter] = useState<Set<string>>(new Set(['LONG', 'SHORT', 'CALL', 'PUT']));
 
@@ -137,6 +141,9 @@ export default function RecommendationsTable({
             index={idx}
             price={prices[rec.ticker]}
             onAddPosition={onAddPosition}
+            brokerageConnected={brokerageConnected}
+            currentPrice={prices[rec.ticker]}
+            onTradeExecuted={onTradeExecuted}
           />
         ))}
       </div>

@@ -101,3 +101,34 @@ export async function findPositionByTicker(userId: string, ticker: string): Prom
     direction: data.direction,
   };
 }
+
+// Brokerage account storage
+
+export async function getBrokerageAccount(userId: string): Promise<{ encrypted_api_key: string; encrypted_secret_key: string; account_type: string } | null> {
+  const db = getClient();
+  if (!db) return null;
+  const { data } = await db
+    .from('brokerage_accounts')
+    .select('encrypted_api_key, encrypted_secret_key, account_type')
+    .eq('user_id', userId)
+    .single();
+  return data ?? null;
+}
+
+export async function saveBrokerageAccount(userId: string, encryptedApiKey: string, encryptedSecretKey: string, accountType: string): Promise<void> {
+  const db = getClient();
+  if (!db) throw new Error('Database not configured');
+  const { error } = await db
+    .from('brokerage_accounts')
+    .upsert(
+      { user_id: userId, encrypted_api_key: encryptedApiKey, encrypted_secret_key: encryptedSecretKey, account_type: accountType },
+      { onConflict: 'user_id' }
+    );
+  if (error) throw error;
+}
+
+export async function deleteBrokerageAccount(userId: string): Promise<void> {
+  const db = getClient();
+  if (!db) return;
+  await db.from('brokerage_accounts').delete().eq('user_id', userId);
+}

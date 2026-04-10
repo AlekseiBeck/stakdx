@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { TradeRecommendation } from '../types';
+import ExecuteTradeModal from './ExecuteTradeModal';
 
 interface Props {
   rec: TradeRecommendation;
   index: number;
   price?: number;
   onAddPosition: (rec: TradeRecommendation) => void;
+  brokerageConnected?: boolean;
+  currentPrice?: number;
+  session?: unknown;
+  onTradeExecuted?: () => void;
 }
 
 function DirectionBadge({ direction }: { direction: TradeRecommendation['direction'] }) {
@@ -78,8 +83,9 @@ function calcPct(entry: string, price: string, isShort: boolean): string | null 
   return `~${pct}%`;
 }
 
-export default function RecommendationCard({ rec, index, price, onAddPosition }: Props) {
+export default function RecommendationCard({ rec, index, price, onAddPosition, brokerageConnected, currentPrice, session, onTradeExecuted }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [showTradeModal, setShowTradeModal] = useState(false);
   const rr = calcRR(rec);
   const isShort = rec.direction === 'SHORT' || rec.direction === 'PUT';
 
@@ -197,7 +203,7 @@ export default function RecommendationCard({ rec, index, price, onAddPosition }:
           )}
 
           {/* Track Position button */}
-          <div className="pt-1">
+          <div className="pt-1 space-y-2">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -210,8 +216,35 @@ export default function RecommendationCard({ rec, index, price, onAddPosition }:
               </svg>
               Track Position
             </button>
+            {brokerageConnected && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowTradeModal(true);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-cyan-700/60 text-cyan-400 hover:bg-cyan-950/40 hover:border-cyan-600 text-sm font-semibold transition-all"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                </svg>
+                Execute Paper Trade
+              </button>
+            )}
           </div>
         </div>
+      )}
+      {showTradeModal && (
+        <ExecuteTradeModal
+          isOpen={showTradeModal}
+          onClose={() => setShowTradeModal(false)}
+          recommendation={rec}
+          currentPrice={currentPrice ?? price ?? 0}
+          session={session}
+          onSuccess={() => {
+            setShowTradeModal(false);
+            onTradeExecuted?.();
+          }}
+        />
       )}
     </div>
   );

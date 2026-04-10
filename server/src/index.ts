@@ -17,8 +17,10 @@ import { analyzeCandlesWithClaude, analyzeBatchWithClaude, analyzePositionWithCl
 import { fetchFinnhubNews, fetchUpcomingEarnings } from './finnhub';
 import { MOCK_RECOMMENDATIONS, MOCK_NEWS, MOCK_POSITION_UPDATE } from './mockData';
 import { requireAuth, AuthRequest } from './auth';
-import { hasDatabase, getPositions, createPosition, deletePosition, findPositionByTicker } from './db';
+import { hasDatabase, getPositions, createPosition, deletePosition, findPositionByTicker, getBrokerageAccount, saveBrokerageAccount, deleteBrokerageAccount } from './db';
 import { Position } from './types';
+import { encrypt, decrypt } from './encryption';
+import { fetchAccount, fetchPositions as fetchAlpacaPositions, fetchOrders, placeOrder, cancelOrder } from './brokerage';
 import { WATCHLIST } from './alpaca';
 
 const app = express();
@@ -326,10 +328,121 @@ app.get('/api/positions/:ticker/update', requireAuth, async (req: AuthRequest, r
   }
 });
 
+// Helper: load and decrypt user's brokerage credentials
+async function getUserBrokerageKeys(userId: string): Promise<{ apiKey: string; secretKey: string } | null> {
+  const account = await getBrokerageAccount(userId);
+  if (!account) return null;
+  try {
+    return { apiKey: decrypt(account.encrypted_api_key), secretKey: decrypt(account.encrypted_secret_key) };
+  } catch {
+    return null;
+  }
+}
+
+// POST /api/brokerage/connect
+app.post('/api/brokerage/connect', requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.userId!;
+  const { apiKey, secretKey, accountType = 'paper' } = req.body as { apiKey?: string; secretKey?: string; accountType?: string };
+  if (!apiKey || !secretKey) return res.status(400).json({ error: 'apiKey and secretKey required' });
+
+  if (!hasDatabase()) return res.status(503).json({ error: 'Brokerage linking requires a database connection' });
+
+  // Verify credentials work before saving
+  try {
+    await fetchAccount(apiKey, secretKey);
+  } catch {
+    return res.status(400).json({ error: 'Invalid Alpaca credentials — could not connect to account' });
+  }
+
+  try {
+    await saveBrokerageAccount(userId, encrypt(apiKey), encrypt(secretKey), accountType);
+    return res.json({ success: true, accountType });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to save brokerage account' });
+  }
+});
+
+// GET /api/brokerage/status
+app.get('/api/brokerage/status', requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.userId!;
+  if (!hasDatabase()) return res.json({ connected: false });
+  const account = await getBrokerageAccount(userId);
+  if (!account) return res.json({ connected: false });
+  return res.json({ connected: true, accountType: account.account_type });
+});
+
+// DELETE /api/brokerage/disconnect
+app.delete('/api/brokerage/disconnect', requireAuth, async (req: AuthRequest, res) => {
+  await deleteBrokerageAccount(req.userId!);
+  return res.json({ success: true });
+});
+
+// GET /api/brokerage/account
+app.get('/api/brokerage/account', requireAuth, async (req: AuthRequest, res) => {
+  const keys = await getUserBrokerageKeys(req.userId!);
+  if (!keys) return res.status(404).json({ error: 'No brokerage account connected' });
+  try {
+    const account = await fetchAccount(keys.apiKey, keys.secretKey);
+    return res.json({ account });
+  } catch {
+    return res.status(502).json({ error: 'Failed to reach Alpaca' });
+  }
+});
+
+// GET /api/brokerage/positions
+app.get('/api/brokerage/positions', requireAuth, async (req: AuthRequest, res) => {
+  const keys = await getUserBrokerageKeys(req.userId!);
+  if (!keys) return res.status(404).json({ error: 'No brokerage account connected' });
+  try {
+    const [positions, orders] = await Promise.all([
+      fetchAlpacaPositions(keys.apiKey, keys.secretKey),
+      fetchOrders(keys.apiKey, keys.secretKey),
+    ]);
+    return res.json({ positions, orders });
+  } catch {
+    return res.status(502).json({ error: 'Failed to reach Alpaca' });
+  }
+});
+
+// POST /api/brokerage/order
+app.post('/api/brokerage/order', requireAuth, async (req: AuthRequest, res) => {
+  const keys = await getUserBrokerageKeys(req.userId!);
+  if (!keys) return res.status(404).json({ error: 'No brokerage account connected' });
+  const { symbol, qty, side, type = 'market', time_in_force = 'day', limit_price } = req.body as {
+    symbol?: string;
+    qty?: number;
+    side?: 'buy' | 'sell';
+    type?: 'market' | 'limit';
+    time_in_force?: 'day' | 'gtc';
+    limit_price?: number;
+  };
+  if (!symbol || !qty || !side) return res.status(400).json({ error: 'symbol, qty, and side are required' });
+  try {
+    const order = await placeOrder(keys.apiKey, keys.secretKey, { symbol, qty, side, type, time_in_force, limit_price });
+    return res.status(201).json({ order });
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.response?.data?.message ?? 'Order failed' });
+  }
+});
+
+// DELETE /api/brokerage/order/:orderId
+app.delete('/api/brokerage/order/:orderId', requireAuth, async (req: AuthRequest, res) => {
+  const keys = await getUserBrokerageKeys(req.userId!);
+  if (!keys) return res.status(404).json({ error: 'No brokerage account connected' });
+  try {
+    await cancelOrder(keys.apiKey, keys.secretKey, req.params.orderId);
+    return res.json({ success: true });
+  } catch {
+    return res.status(400).json({ error: 'Failed to cancel order' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Alpaca keys: ${process.env.ALPACA_API_KEY ? 'SET' : 'NOT SET'}`);
   console.log(`Anthropic key: ${process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT SET'}`);
   console.log(`Finnhub key: ${process.env.FINNHUB_API_KEY ? 'SET' : 'NOT SET'}`);
   console.log(`Supabase: ${hasDatabase() ? 'SET' : 'NOT SET (using in-memory fallback)'}`);
+  console.log(`Encryption key: ${process.env.ENCRYPTION_KEY ? 'SET' : 'NOT SET'}`);
+  console.log(`Paper trading endpoint: ${process.env.ALPACA_PAPER_ENDPOINT || 'https://paper-api.alpaca.markets'}`);
 });

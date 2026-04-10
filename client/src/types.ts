@@ -44,3 +44,42 @@ export interface PositionUpdate {
 }
 
 export type ScanMode = 'long' | 'both' | 'short';
+
+export interface BrokerageStatus {
+  connected: boolean;
+  accountType?: 'paper' | 'live';
+}
+
+export interface AlpacaAccount {
+  cash: string;
+  buying_power: string;
+  equity: string;
+  portfolio_value: string;
+  account_number: string;
+  status: string;
+}
+
+export interface AlpacaPosition {
+  symbol: string;
+  qty: string;
+  side: string;
+  avg_entry_price: string;
+  current_price: string;
+  market_value: string;
+  unrealized_pl: string;
+  unrealized_plpc: string;
+  change_today: string;
+}
+
+export interface AlpacaOrder {
+  id: string;
+  symbol: string;
+  qty: string;
+  filled_qty: string;
+  side: string;
+  type: string;
+  status: string;
+  submitted_at: string;
+  filled_at: string | null;
+  filled_avg_price: string | null;
+}

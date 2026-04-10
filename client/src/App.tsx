@@ -4,11 +4,13 @@ import RecommendationsTable from './components/RecommendationsTable';
 import PositionsPanel from './components/PositionsPanel';
 import NewsPanel from './components/NewsPanel';
 import AddPositionModal from './components/AddPositionModal';
+import ConnectBrokerageModal from './components/ConnectBrokerageModal';
+import PaperTradingPanel from './components/PaperTradingPanel';
 import AuthPage from './pages/AuthPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import { useAuth } from './AuthContext';
-import { TradeRecommendation, NewsItem, Position, ScanMode } from './types';
-import { scanStream, runScan, fetchNews, addPosition, fetchPositions } from './api';
+import { TradeRecommendation, NewsItem, Position, ScanMode, BrokerageStatus } from './types';
+import { scanStream, runScan, fetchNews, addPosition, fetchPositions, getBrokerageStatus } from './api';
 import { SP500_TICKERS } from './constants';
 
 type MobileTab = 'scan' | 'positions' | 'news';
@@ -51,6 +53,9 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const [buyingPower, setBuyingPower] = useState<string>('');
   const [mode, setMode] = useState<ScanMode>('both');
   const [mobileTab, setMobileTab] = useState<MobileTab>('scan');
+  const [brokerageStatus, setBrokerageStatus] = useState<BrokerageStatus>({ connected: false });
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [showPaperPanel, setShowPaperPanel] = useState(false);
 
   const loadNews = useCallback(async () => {
     try {
@@ -72,6 +77,10 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     const interval = setInterval(loadNews, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [loadNews, loadPositions]);
+
+  useEffect(() => {
+    getBrokerageStatus().then(setBrokerageStatus).catch(() => {});
+  }, []);
 
   const handleScan = async () => {
     setIsScanning(true);
@@ -156,6 +165,9 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
         onBuyingPowerChange={setBuyingPower}
         onScan={handleScan}
         isScanning={isScanning}
+        brokerageConnected={brokerageStatus.connected}
+        onOpenConnectModal={() => setShowConnectModal(true)}
+        onOpenPaperPanel={() => setShowPaperPanel(true)}
       />
 
       {/* Error banner */}
@@ -203,6 +215,8 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
               onAddPosition={(rec) => handleOpenAddModal(rec)}
               isStreaming={isStreaming}
               streamPhase={streamPhase}
+              brokerageConnected={brokerageStatus.connected}
+              onTradeExecuted={() => { if (showPaperPanel) setShowPaperPanel(false); setTimeout(() => setShowPaperPanel(true), 50); }}
             />
           </div>
 
@@ -248,6 +262,8 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
                 onAddPosition={(rec) => handleOpenAddModal(rec)}
                 isStreaming={isStreaming}
                 streamPhase={streamPhase}
+                brokerageConnected={brokerageStatus.connected}
+                onTradeExecuted={() => { if (showPaperPanel) setShowPaperPanel(false); setTimeout(() => setShowPaperPanel(true), 50); }}
               />
             </div>
           )}
@@ -307,6 +323,26 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
           onClose={handleCloseModal}
           onAdd={handleAddPosition}
         />
+      )}
+
+      <ConnectBrokerageModal
+        isOpen={showConnectModal}
+        onClose={() => setShowConnectModal(false)}
+        onConnected={() => {
+          setShowConnectModal(false);
+          getBrokerageStatus().then(setBrokerageStatus).catch(() => {});
+        }}
+      />
+
+      {showPaperPanel && (
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-4 sm:pb-0" onClick={() => setShowPaperPanel(false)}>
+          <div className="w-full max-w-xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <PaperTradingPanel
+              visible={showPaperPanel}
+              onClose={() => setShowPaperPanel(false)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
