@@ -357,8 +357,9 @@ app.post('/api/brokerage/connect', requireAuth, async (req: AuthRequest, res) =>
   try {
     await saveBrokerageAccount(userId, encrypt(apiKey), encrypt(secretKey), accountType);
     return res.json({ success: true, accountType });
-  } catch (err) {
-    return res.status(500).json({ error: 'Failed to save brokerage account' });
+  } catch (err: any) {
+    console.error('[brokerage/connect] save error:', err?.message ?? err);
+    return res.status(500).json({ error: 'Failed to save brokerage account', detail: err?.message });
   }
 });
 

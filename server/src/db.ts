@@ -121,8 +121,8 @@ export async function saveBrokerageAccount(userId: string, encryptedApiKey: stri
   const { error } = await db
     .from('brokerage_accounts')
     .upsert(
-      { user_id: userId, encrypted_api_key: encryptedApiKey, encrypted_secret_key: encryptedSecretKey, account_type: accountType },
-      { onConflict: 'user_id' }
+      { user_id: userId, broker: 'alpaca', encrypted_api_key: encryptedApiKey, encrypted_secret_key: encryptedSecretKey, account_type: accountType },
+      { onConflict: 'user_id,broker' }
     );
   if (error) throw error;
 }
