@@ -1,9 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Candle, TradeRecommendation, NewsItem, PositionUpdate, Position } from './types';
-import { summarizeCandles, summarizeIntradayCandles } from './alpaca';
+import {
+  Candle, TradeRecommendation, NewsItem, PositionUpdate, Position,
+  MacroRegime, ScoredNewsItem, RedditSentimentEntry, EconomicEvent,
+} from './types';
+import {
+  summarizeCandles, summarizeIntradayCandles, summarizePremarket, summarizeWeeklyCandles,
+} from './alpaca';
 import type { FinnhubNewsItem, EarningsEvent } from './finnhub';
 
-// StockTwits sentiment shape (from alpaca.fetchStockTwitsSentiment)
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 type StockTwitsSentimentEntry = {
   sentiment: 'bullish' | 'bearish' | 'neutral';
   bullCount: number;
@@ -11,437 +17,570 @@ type StockTwitsSentimentEntry = {
   total: number;
 };
 
-// Broad sentiment map type accepted by analyzeCandlesWithClaude — supports both
-// the old Claude-based shape (signal string) and the new StockTwits shape (counts).
-type SentimentEntry = {
-  sentiment: string;
-  signal?: string;
-  bullCount?: number;
-  bearCount?: number;
-  total?: number;
-};
+type SentimentMap = Record<string, StockTwitsSentimentEntry>;
 
-type SentimentMap = Record<string, SentimentEntry>;
-
-function buildScanPrompt(buyingPower: number | null): string {
-  const hasBP = buyingPower && buyingPower > 0;
-  const maxRiskPerTrade = hasBP ? (buyingPower! * 0.02).toFixed(2) : null;
-
-  const buyingPowerSection = hasBP
-    ? `
-BUYING POWER & POSITION SIZING:
-- Available capital: $${buyingPower!.toLocaleString()}
-- Max risk per trade: 2% = $${maxRiskPerTrade} (this is the MAXIMUM loss if stopped out)
-- Position size formula for stocks: shares = $${maxRiskPerTrade} / (entry price - stop loss price)
-- Position size formula for options: contracts = $${maxRiskPerTrade} / (option premium × 100)
-- Prioritize the highest-conviction setups — if buying power is limited, fewer better trades beats more mediocre ones
-- Include exact share/contract counts in positionSize field
-- Calculate maxRisk and potentialGain in exact dollar amounts based on position size`
-    : `
-POSITION SIZING: No buying power specified. Use "size to 2% account risk" as positionSize. Estimate maxRisk and potentialGain as relative to a standard position.`;
-
-  return `You are a professional swing trader with 20+ years of experience at a top-tier hedge fund. You specialize in 1-3 day momentum trades using technical analysis, volume analysis, and news catalysts. You are disciplined, precise, and only recommend trades with genuine edge.
-
-CORE PHILOSOPHY: Quality over quantity. Return ONLY setups you would personally trade with real capital. It is far better to return 3 exceptional setups than 10 mediocre ones. If fewer than 3 truly qualify, return only those that do.
-${buyingPowerSection}
-
-━━━ DATA FORMAT ━━━
-Each stock entry contains 5 daily candles: DATE O[open] H[high] L[low] C[close] V[millions]
-Followed by: % change on latest day, candle body as % of total range (higher = stronger conviction candle), and volume ratio vs recent average (>1.3x is meaningful, >2x is significant).
-
-━━━ TECHNICAL ANALYSIS FRAMEWORK ━━━
-
-BULLISH PATTERNS (LONG / CALL):
-• Bullish Engulfing — current green candle body fully engulfs prior red candle body. Best at support. Requires vol ≥1.3x avg.
-• Hammer / Pin Bar — lower wick ≥2x body size, closes near high, at support level. Signals rejection of lower prices.
-• Morning Star — 3-candle: bearish candle → small indecision candle → bullish candle closing >50% into first candle's body.
-• Inside Bar Breakout — current candle contained within prior candle's range. Breakout direction = next move.
-• EMA/Support Bounce — price dips to and bounces from a key moving average or prior support with bullish candle + volume.
-• Cup and Handle / Base Breakout — multi-day consolidation followed by a volume-confirmed break above resistance.
-
-BEARISH PATTERNS (SHORT / PUT):
-• Bearish Engulfing — current red candle body fully engulfs prior green candle body at resistance. Requires vol ≥1.3x avg.
-• Shooting Star / Gravestone Doji — upper wick ≥2x body, closes near low, at resistance. Signals rejection of higher prices.
-• Evening Star — opposite of morning star. 3-candle reversal at highs.
-• Distribution Day — high-volume down day near recent highs, suggesting institutional selling.
-• Resistance Failure — price tests a prior high/resistance multiple times but fails to close above it.
-
-━━━ MANDATORY QUALITY FILTERS ━━━
-Reject any setup that fails these — do not include it in output:
-1. Risk/Reward ≥ 2:1 — target distance must be at least 2× the stop distance. No exceptions.
-2. Volume confirmation — signal candle must have volume ≥ average. Low-volume breakouts are traps.
-3. Trend alignment — trade direction must match the 3-5 day trend OR there must be a clear reversal pattern. Do not fade strong trends without a reversal signal.
-4. No overextension — do not recommend LONG on stocks >12% above nearest support, or SHORT on stocks >12% below nearest resistance.
-5. Sector diversity — do not recommend more than 3 stocks from the same sector in one scan.
-6. Confidence floor — minimum confidence of 58. Do not include anything below this threshold.
-
-━━━ CONFIDENCE SCORING RUBRIC ━━━
-Score based on how many signals align:
-• 88-100: Pattern + high-volume confirmation + news catalyst + trend alignment + clean S/R level. Rare. High conviction.
-• 75-87: Pattern + volume + either news OR trend alignment. Strong setup.
-• 65-74: Clear pattern + average or better volume. Decent setup, size conservatively.
-• 58-64: Pattern present but 1-2 confirming factors weak or absent. Only include if no better options exist.
-• Below 58: EXCLUDE from output entirely.
-
-Adjustments:
-• News directly supports trade direction: +8 to +12 confidence
-• News contradicts trade direction: −15 confidence (note the conflict in rationale)
-• Macro/political news (Fed hawkish, tariffs, geopolitical tension): apply bearish bias across all, reduce long confidence −5
-• Macro news bullish (rate cuts, stimulus, strong GDP): apply bullish bias, reduce short confidence −5
-• SPY/QQQ candles show clear 3-5 day downtrend: reduce all long confidence −8, increase short confidence +8
-• SPY/QQQ candles show clear 3-5 day uptrend: reduce all short confidence −8, increase long confidence +8
-• Social sentiment bullish for ticker: +5 confidence for LONG/CALL setups
-• Social sentiment bearish for ticker: +5 confidence for SHORT/PUT setups, −5 for LONG/CALL
-
-━━━ OPTIONS vs STOCK GUIDANCE ━━━
-Use CALL or PUT when:
-• Confidence ≥ 75 AND setup suggests a sharp, fast move (not a slow grind)
-• The underlying stock shows a high-conviction reversal or breakout pattern
-• Buying power is limited (options provide leverage with defined risk)
-• A catalyst (earnings reaction, FDA, macro event) is driving the move
-
-Use LONG or SHORT when:
-• Setup is a steady momentum trade expected to grind in one direction
-• Confidence is 58-74 (lower conviction = defined stock risk better than options decay)
-• The stock is lower-priced and options premiums are unfavorable
-
-━━━ MARKET REGIME & MACRO CONTEXT ━━━
-• Use SPY and QQQ candle data to read overall market health before picking individual stocks
-• In confirmed downtrend (SPY red multiple days, vol increasing): heavily favor shorts/puts, flag longs as counter-trend
-• In confirmed uptrend: heavily favor longs/calls
-• In choppy/sideways market: reduce all confidence scores by 5, prefer tighter timeframes (1-2 days)
-• Political/regulatory headlines (tariffs, antitrust, FDA): apply sector-specific impact before scoring
-
-━━━ OUTPUT FORMAT ━━━
-Return ONLY a valid JSON array. No markdown, no text before or after the array. Each object must contain exactly these fields:
-{
-  "ticker": string,
-  "direction": "LONG" | "SHORT" | "CALL" | "PUT",
-  "confidence": number (58-100),
-  "entryZone": string (e.g. "$182.50 - $183.00" — tight range near current price or breakout level),
-  "stopLoss": string (e.g. "$178.20" — technical invalidation level, not arbitrary),
-  "target": string (e.g. "$191.00" — next key resistance/support, must give ≥2:1 R/R),
-  "timeframe": string (e.g. "1-2 days"),
-  "rationale": string (2-3 sentences: name the pattern, cite the confirming signals, explain why this entry point specifically),
-  "pattern": string (specific pattern name, e.g. "Bullish Engulfing at 50-day Support"),
-  "positionSize": string (share count or contract count with calculation basis),
-  "maxRisk": string (dollar amount at risk if stopped out),
-  "potentialGain": string (dollar gain if target hit, based on position size)
-}`;
-}
-
-function buildPositionPrompt(): string {
-  return `You are a professional swing trader managing open positions at a hedge fund. Your job is to monitor active trades and issue clear, decisive verdicts.
-
-VERDICT DEFINITIONS:
-• HOLD — Price action and thesis remain intact. The original setup is playing out as expected. No action needed.
-• CAUTION — Something has changed (adverse candle, volume shift, news) that threatens the position. Consider tightening stop or reducing size but do not fully exit yet. Monitor closely.
-• SELL — Exit the position now. Either the stop has been triggered, the thesis is broken, or a strong reversal signal has emerged against the position.
-
-DECISION FRAMEWORK:
-For LONG positions:
-- HOLD if: price is above entry or at entry with constructive candle, volume declining on any pullback, thesis intact
-- CAUTION if: price approaching stop, bearish candle on elevated volume, adverse news, or position up >50% of target (consider partial profit)
-- SELL if: stop hit, bearish engulfing on high volume, thesis-breaking news, or price failed to make new high after 2 days
-
-For SHORT positions:
-- HOLD if: price is below entry, any bounces are weak/low volume, trend intact
-- CAUTION if: price approaching stop, bullish reversal candle, unexpected positive news
-- SELL if: stop hit, bullish engulfing on high volume, or strong gap up
-
-PROFIT-TAKING GUIDANCE:
-- If position is up >75% of the distance to target: consider recommending partial profit (50%) in rationale
-- If position has been held 3+ days without hitting target: evaluate whether momentum is stalling
-
-Return ONLY valid JSON with exactly these fields, no markdown:
-{
-  "verdict": "HOLD" | "SELL" | "CAUTION",
-  "reasoning": string (2-3 sentences: what you see in the price action, why you made this call, what to watch for),
-  "currentPrice": string (formatted as "$XXX.XX"),
-  "priceChange": string (formatted as "+X.XX%" or "-X.XX%")
-}`;
-}
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function hasAnthropicKey(): boolean {
   return !!(process.env.ANTHROPIC_API_KEY &&
     process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key_here');
 }
 
-// Build the StockTwits sentiment section for the Claude prompt
-function buildStockTwitsSection(
-  sentiment: Record<string, StockTwitsSentimentEntry>
-): string {
-  const entries = Object.entries(sentiment);
-  if (entries.length === 0) return '';
-
-  const lines = entries.map(([ticker, s]) => {
-    const bullPct = s.total > 0 ? Math.round((s.bullCount / s.total) * 100) : 0;
-    const label = s.sentiment.toUpperCase();
-    return `${ticker}: ${label} ${s.bullCount}🟢 / ${s.bearCount}🔴 (${bullPct}% bull, ${s.total} votes)`;
-  });
-
-  return `
-SOCIAL SENTIMENT (StockTwits real-time — last 30 messages per ticker):
-${lines.join('\n')}
-Confidence adjustment: add +5 when social aligns with technical signal, -5 when contradicts.
-`;
+function getClient(): Anthropic {
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 }
 
-// Build the Finnhub news section for the Claude prompt
-function buildFinnhubNewsSection(finnhubNews: FinnhubNewsItem[]): string {
-  if (finnhubNews.length === 0) return '';
+// ─── Layer 1: Macro Regime Classifier (Claude Haiku) ────────────────────────
+//
+// Runs a fast, cheap Haiku call before the main analysis to classify the
+// overall market environment. This context is injected into every Sonnet call
+// so that individual stock recommendations are anchored to the macro reality.
 
-  const now = Date.now() / 1000; // unix seconds
-  const lines = finnhubNews.slice(0, 15).map(item => {
-    const ageHours = Math.round((now - item.datetime) / 3600);
-    const age = ageHours < 1 ? '<1h ago' : `${ageHours}h ago`;
-    return `[${item.ticker}] "${item.headline}" — ${item.source} (${age})`;
-  });
-
-  return `
-FINNHUB NEWS (last 72h, multi-source):
-${lines.join('\n')}
-`;
-}
-
-// Build the earnings risk section for the Claude prompt
-function buildEarningsSection(earningsEvents: EarningsEvent[]): string {
-  if (earningsEvents.length === 0) return '';
-
-  const lines = earningsEvents.map(e => {
-    const epsStr = e.epsEstimate != null ? ` | EPS est: $${e.epsEstimate}` : '';
-    const revStr = e.revenueEstimate != null
-      ? ` | Rev est: $${(e.revenueEstimate / 1e9).toFixed(1)}B`
-      : '';
-    return `${e.ticker}: reports ${e.date}${epsStr}${revStr}`;
-  });
-
-  return `
-EARNINGS WITHIN 7 DAYS — HIGH RISK:
-${lines.join('\n')}
-These tickers carry elevated IV and gap risk. For options plays, note IV crush post-earnings.
-For stock plays, tighten stops or size down 50% if holding through earnings.
-`;
-}
-
-// Build the intraday context section for the Claude prompt
-function buildIntradaySection(intradayData: Record<string, Candle[]>): string {
-  const entries = Object.entries(intradayData).filter(([, c]) => c.length > 0);
-  if (entries.length === 0) return '';
-
-  const lines = entries.map(([ticker, candles]) =>
-    summarizeIntradayCandles(ticker, candles)
-  );
-
-  return `
-INTRADAY CONTEXT (1h bars, last 2 trading days):
-${lines.join('\n')}
-Use this for precise entry timing — daily candles show the setup, intraday shows current momentum.
-`;
-}
-
-// Build the legacy/generic sentiment section for the Claude prompt
-// Handles both StockTwits shape (bullCount/bearCount) and old signal-string shape
-function buildGenericSentimentSection(sentiment: SentimentMap): string {
-  const entries = Object.entries(sentiment);
-  if (entries.length === 0) return '';
-
-  const lines = entries.map(([ticker, s]) => {
-    if (s.bullCount != null && s.bearCount != null && s.total != null) {
-      const bullPct = s.total > 0 ? Math.round((s.bullCount / s.total) * 100) : 0;
-      return `${ticker}: ${s.sentiment.toUpperCase()} ${s.bullCount}🟢 / ${s.bearCount}🔴 (${bullPct}% bull, ${s.total} votes)`;
-    }
-    return `${ticker}: ${s.sentiment}${s.signal ? ` — ${s.signal}` : ''}`;
-  });
-
-  return `
-SOCIAL SENTIMENT (StockTwits real-time — last 30 messages per ticker):
-${lines.join('\n')}
-Confidence adjustment: add +5 when social aligns with technical signal, -5 when contradicts.
-`;
-}
-
-export async function analyzeCandlesWithClaude(
-  candleData: Record<string, Candle[]>,
-  news: NewsItem[],
+export async function classifyMacroRegime(
+  spyCandles: Candle[],
+  qqqCandles: Candle[],
   marketNews: NewsItem[],
-  buyingPower: number | null = null,
-  focusDirections: string[] = [],
-  sentiment: SentimentMap = {},
-  finnhubNews: FinnhubNewsItem[] = [],
-  earningsEvents: EarningsEvent[] = [],
-  intradayData: Record<string, Candle[]> = {}
-): Promise<TradeRecommendation[] | null> {
+  economicEvents: EconomicEvent[]
+): Promise<MacroRegime | null> {
   if (!hasAnthropicKey()) return null;
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = getClient();
 
-  const allNews = [...news, ...marketNews]
-    .filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i)
-    .slice(0, 25)
-    .map((n) => {
-      const tickers = n.symbols.length ? `[${n.symbols.join(',')}]` : '[MARKET]';
-      return `${tickers} ${n.headline} — ${n.summary?.slice(0, 120) ?? ''} (${n.source})`;
-    });
+  const spySummary = summarizeCandles('SPY', spyCandles);
+  const qqqSummary = summarizeCandles('QQQ', qqqCandles);
+  const newsLines = marketNews.slice(0, 12).map(n => `• ${n.headline}`).join('\n');
+  const calendarLines = economicEvents.length > 0
+    ? economicEvents.map(e => `${e.date} [${e.impact.toUpperCase()}] ${e.event}`).join('\n')
+    : 'None scheduled';
 
-  const focusSection = focusDirections.length > 0
-    ? `\nSCAN FOCUS (STRICT): Return ONLY setups where direction is one of: ${focusDirections.join(', ')}. Do NOT include any other direction types — no exceptions. Within the allowed direction(s), be thorough: return every setup that clears the mandatory quality filters and confidence floor. Do not self-limit to 3-5 picks — if 8 LONG setups qualify, return all 8. The user wants maximum coverage for the selected type(s).\n`
-    : '';
+  const userMsg = `SPY (5-day daily): ${spySummary}
+QQQ (5-day daily): ${qqqSummary}
 
-  const sentimentSection = buildGenericSentimentSection(sentiment);
-  const finnhubSection = buildFinnhubNewsSection(finnhubNews);
-  const earningsSection = buildEarningsSection(earningsEvents);
-  const intradaySection = buildIntradaySection(intradayData);
+Economic events next 7 days:
+${calendarLines}
 
-  // Split candle data into two halves for parallel Claude calls
-  const entries = Object.entries(candleData);
-  const midpoint = Math.ceil(entries.length / 2);
-  const batch1Entries = entries.slice(0, midpoint);
-  const batch2Entries = entries.slice(midpoint);
+Recent broad market headlines:
+${newsLines}
 
-  const buildUserMessage = (batchEntries: [string, Candle[]][]) => {
-    const stockSummaries = batchEntries
-      .map(([ticker, candles]) => summarizeCandles(ticker, candles))
-      .join('\n');
-
-    return `Analysis date: ${new Date().toISOString().split('T')[0]}
-Stocks to analyze: ${batchEntries.length}
-${buyingPower ? `Buying power: $${buyingPower.toLocaleString()}` : ''}
-${focusSection}
-STOCK CANDLE DATA (5 days each):
-${stockSummaries}
-
-RECENT NEWS (ticker-specific + broad market):
-${allNews.join('\n')}
-${sentimentSection}${finnhubSection}${earningsSection}${intradaySection}
-Analyze the above data and return your swing trade recommendations as a JSON array.`;
-  };
-
-  const systemPrompt = buildScanPrompt(buyingPower);
+Classify the current market regime. Return ONLY valid JSON, no other text:
+{
+  "regime": "RISK_ON" | "RISK_OFF" | "MIXED",
+  "fedStance": "HAWKISH" | "NEUTRAL" | "DOVISH",
+  "topRisks": ["risk1", "risk2", "risk3"],
+  "sectorBias": {
+    "tech": "bullish" | "bearish" | "neutral",
+    "financials": "bullish" | "bearish" | "neutral",
+    "energy": "bullish" | "bearish" | "neutral",
+    "healthcare": "bullish" | "bearish" | "neutral",
+    "consumer": "bullish" | "bearish" | "neutral",
+    "industrials": "bullish" | "bearish" | "neutral"
+  },
+  "summary": "One sentence describing the dominant market theme right now"
+}`;
 
   try {
-    const [result1, result2] = await Promise.all([
-      client.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: buildUserMessage(batch1Entries) }],
-      }),
-      batch2Entries.length > 0
-        ? client.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 8192,
-            system: systemPrompt,
-            messages: [{ role: 'user', content: buildUserMessage(batch2Entries) }],
-          })
-        : Promise.resolve(null),
-    ]);
-
-    const parseResult = (msg: Anthropic.Message | null): TradeRecommendation[] => {
-      if (!msg) return [];
-      const rawText = msg.content[0].type === 'text' ? msg.content[0].text : '';
-      const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      try {
-        return JSON.parse(cleaned) as TradeRecommendation[];
-      } catch {
-        return [];
-      }
-    };
-
-    const batch1Results = parseResult(result1);
-    const batch2Results = parseResult(result2);
-
-    // Merge, deduplicate by ticker, sort by confidence descending
-    const merged = [...batch1Results, ...batch2Results];
-    const seen = new Set<string>();
-    const deduped = merged.filter((r) => {
-      if (seen.has(r.ticker)) return false;
-      seen.add(r.ticker);
-      return true;
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      system: 'You are a macro market analyst. Classify the market regime from the data provided. Return ONLY valid JSON — no markdown, no explanation.',
+      messages: [{ role: 'user', content: userMsg }],
     });
 
-    const sorted = deduped.sort((a, b) => b.confidence - a.confidence);
-
-    // Hard enforce focus directions — strip any that slipped through
-    if (focusDirections.length > 0) {
-      return sorted.filter(r => focusDirections.includes(r.direction));
-    }
-    return sorted;
+    const raw = msg.content[0].type === 'text' ? msg.content[0].text : '';
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(cleaned) as MacroRegime;
   } catch (err) {
-    console.error('Claude scan error:', err);
+    console.error('[claude] Macro regime classification error:', err);
     return null;
   }
 }
 
-// Analyze a pre-split batch — used by SSE streaming endpoint.
-export async function analyzeBatchWithClaude(
-  batchEntries: [string, Candle[]][],
-  news: NewsItem[],
-  marketNews: NewsItem[],
-  buyingPower: number | null,
-  focusDirections: string[],
-  sentiment: SentimentMap,
-  finnhubNews: FinnhubNewsItem[] = [],
-  earningsEvents: EarningsEvent[] = [],
-  intradayData: Record<string, Candle[]> = {}
-): Promise<TradeRecommendation[]> {
-  if (!hasAnthropicKey() || batchEntries.length === 0) return [];
+// ─── Layer 2: News Impact Scorer (Claude Haiku) ──────────────────────────────
+//
+// Pre-processes raw news headlines into structured, impact-scored items.
+// Only HIGH and MEDIUM items reach the main Sonnet prompt — dramatically
+// improving signal quality by filtering out noise before the expensive call.
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+export async function scoreNewsImpact(
+  news: Array<{ headline: string; ticker?: string; source: string }>
+): Promise<ScoredNewsItem[]> {
+  if (!hasAnthropicKey() || news.length === 0) return [];
 
-  const allNews = [...news, ...marketNews]
-    .filter((n, i, arr) => arr.findIndex(x => x.id === n.id) === i)
-    .slice(0, 25)
-    .map((n) => {
-      const tickers = n.symbols.length ? `[${n.symbols.join(',')}]` : '[MARKET]';
-      return `${tickers} ${n.headline} — ${n.summary?.slice(0, 120) ?? ''} (${n.source})`;
+  const client = getClient();
+
+  const newsLines = news.slice(0, 30).map((n, i) =>
+    `${i}: [${n.ticker ?? 'MARKET'}] "${n.headline}" — ${n.source}`
+  ).join('\n');
+
+  const userMsg = `Score each headline for stock trading impact. Index is 0-based.
+
+Headlines:
+${newsLines}
+
+Return ONLY a valid JSON array (one entry per headline):
+[{ "index": 0, "impact": "HIGH"|"MEDIUM"|"LOW", "direction": "BULLISH"|"BEARISH"|"NEUTRAL", "category": "earnings"|"macro"|"regulatory"|"product"|"ma"|"geopolitical"|"other" }]`;
+
+  try {
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1200,
+      system: 'You are a financial news analyst. Score each headline for its likely impact on stock prices. Return ONLY a valid JSON array — no markdown, no explanation.',
+      messages: [{ role: 'user', content: userMsg }],
     });
 
-  const focusSection = focusDirections.length > 0
-    ? `\nSCAN FOCUS (STRICT): Return ONLY setups where direction is one of: ${focusDirections.join(', ')}. Do NOT include any other direction types — no exceptions.\n`
-    : '';
+    const raw = msg.content[0].type === 'text' ? msg.content[0].text : '';
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const scored = JSON.parse(cleaned) as Array<{
+      index: number;
+      impact: 'HIGH' | 'MEDIUM' | 'LOW';
+      direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+      category: ScoredNewsItem['category'];
+    }>;
 
-  const sentimentSection = buildGenericSentimentSection(sentiment);
-  const finnhubSection = buildFinnhubNewsSection(finnhubNews);
-  const earningsSection = buildEarningsSection(earningsEvents);
-  const intradaySection = buildIntradaySection(intradayData);
+    // Map back to full headline objects
+    return scored
+      .filter(s => s.impact === 'HIGH' || s.impact === 'MEDIUM')
+      .map(s => {
+        const src = news[s.index];
+        if (!src) return null;
+        return {
+          headline: src.headline,
+          ticker: src.ticker,
+          source: src.source,
+          impact: s.impact,
+          direction: s.direction,
+          category: s.category,
+        } as ScoredNewsItem;
+      })
+      .filter((x): x is ScoredNewsItem => x !== null);
+  } catch (err) {
+    console.error('[claude] News scoring error:', err);
+    return [];
+  }
+}
 
-  const stockSummaries = batchEntries
-    .map(([ticker, candles]) => summarizeCandles(ticker, candles))
-    .join('\n');
+// ─── Prompt Builders ─────────────────────────────────────────────────────────
 
-  const userMessage = `Analysis date: ${new Date().toISOString().split('T')[0]}
+function buildMacroSection(regime: MacroRegime | null): string {
+  if (!regime) return '';
+
+  const regimeEmoji = regime.regime === 'RISK_ON' ? '🟢' : regime.regime === 'RISK_OFF' ? '🔴' : '🟡';
+  const fedEmoji = regime.fedStance === 'HAWKISH' ? '🦅' : regime.fedStance === 'DOVISH' ? '🕊️' : '⚖️';
+
+  const biasLines = Object.entries(regime.sectorBias)
+    .map(([sector, bias]) => `${sector}=${bias}`)
+    .join(' | ');
+
+  return `
+━━━ MACRO REGIME CONTEXT (AI-classified from SPY/QQQ + news) ━━━
+${regimeEmoji} Regime: ${regime.regime} | ${fedEmoji} Fed Stance: ${regime.fedStance}
+Market Theme: ${regime.summary}
+Top Risks: ${regime.topRisks.map((r, i) => `[${i + 1}] ${r}`).join(' | ')}
+Sector Bias: ${biasLines}
+
+REGIME TRADING RULES (apply these before scoring any setup):
+${regime.regime === 'RISK_OFF' ? '• RISK_OFF: Be highly selective on longs. Shorts/puts have macro tailwind. Reduce all long confidence by −10. If setup conflicts with regime — skip it.' : ''}
+${regime.regime === 'RISK_ON' ? '• RISK_ON: Longs/calls have macro tailwind. Reduce short confidence by −8. Momentum setups have higher follow-through probability.' : ''}
+${regime.regime === 'MIXED' ? '• MIXED: Use tighter criteria. Prefer setups with strong individual catalysts over pure-macro plays. Reduce all confidence by −5.' : ''}
+${regime.fedStance === 'HAWKISH' ? '• HAWKISH Fed: Rate-sensitive sectors (real estate, utilities, growth tech) face headwinds. Financials may benefit.' : ''}
+${regime.fedStance === 'DOVISH' ? '• DOVISH Fed: Growth tech, small caps, rate-sensitive plays get a tailwind. Financials may face margin pressure.' : ''}
+`;
+}
+
+function buildScoredNewsSection(scoredNews: ScoredNewsItem[]): string {
+  if (scoredNews.length === 0) return '';
+
+  const high = scoredNews.filter(n => n.impact === 'HIGH');
+  const medium = scoredNews.filter(n => n.impact === 'MEDIUM');
+
+  const formatItem = (n: ScoredNewsItem) => {
+    const dirEmoji = n.direction === 'BULLISH' ? '▲' : n.direction === 'BEARISH' ? '▼' : '─';
+    const ticker = n.ticker ? `[${n.ticker}]` : '[MACRO]';
+    return `${dirEmoji} ${ticker} "${n.headline}" (${n.category}) — ${n.source}`;
+  };
+
+  const lines: string[] = [];
+  if (high.length > 0) {
+    lines.push('HIGH IMPACT:');
+    lines.push(...high.map(n => `  ${formatItem(n)}`));
+  }
+  if (medium.length > 0) {
+    lines.push('MEDIUM IMPACT:');
+    lines.push(...medium.slice(0, 8).map(n => `  ${formatItem(n)}`));
+  }
+
+  return `
+━━━ NEWS (AI pre-scored — HIGH & MEDIUM impact only) ━━━
+${lines.join('\n')}
+`;
+}
+
+function buildEconomicCalendarSection(events: EconomicEvent[]): string {
+  if (events.length === 0) return '';
+
+  const lines = events.map(e => {
+    const emoji = e.impact === 'high' ? '🔴' : '🟡';
+    return `${emoji} ${e.date}: ${e.event} (${e.impact.toUpperCase()} IMPACT)`;
+  });
+
+  return `
+━━━ ECONOMIC CALENDAR — NEXT 7 DAYS ━━━
+${lines.join('\n')}
+CAUTION: Avoid initiating new positions 24h before HIGH impact events unless the setup is exceptional. Reduce confidence by −8 for any stock directly affected.
+`;
+}
+
+function buildStockTwitsSection(sentiment: SentimentMap): string {
+  const entries = Object.entries(sentiment).filter(([, s]) => s.total >= 3);
+  if (entries.length === 0) return '';
+
+  const lines = entries.map(([ticker, s]) => {
+    const bullPct = s.total > 0 ? Math.round((s.bullCount / s.total) * 100) : 0;
+    const emoji = s.sentiment === 'bullish' ? '🟢' : s.sentiment === 'bearish' ? '🔴' : '⚪';
+    return `  ${ticker}: ${emoji} ${s.sentiment.toUpperCase()} ${s.bullCount}▲/${s.bearCount}▼ (${bullPct}% bull, ${s.total} votes)`;
+  });
+
+  return `
+StockTwits (last 30 messages/ticker):
+${lines.join('\n')}
+`;
+}
+
+function buildRedditSection(reddit: Record<string, RedditSentimentEntry>): string {
+  const entries = Object.entries(reddit).filter(([, r]) => r.mentions >= 2);
+  if (entries.length === 0) return '';
+
+  const lines = entries
+    .sort(([, a], [, b]) => b.mentions - a.mentions)
+    .slice(0, 12)
+    .map(([ticker, r]) => {
+      const emoji = r.sentiment === 'bullish' ? '🟢' : r.sentiment === 'bearish' ? '🔴' : '⚪';
+      const postSnip = r.topPost ? ` — "${r.topPost}"` : '';
+      return `  ${ticker}: ${emoji} ${r.sentiment.toUpperCase()} (${r.mentions} mentions)${postSnip}`;
+    });
+
+  return `
+Reddit (r/wallstreetbets + r/stocks):
+${lines.join('\n')}
+`;
+}
+
+function buildEarningsSection(earningsEvents: EarningsEvent[]): string {
+  if (earningsEvents.length === 0) return '';
+  const lines = earningsEvents.map(e => {
+    const epsStr = e.epsEstimate != null ? ` | EPS est: $${e.epsEstimate}` : '';
+    const revStr = e.revenueEstimate != null ? ` | Rev est: $${(e.revenueEstimate / 1e9).toFixed(1)}B` : '';
+    return `  ⚠️  ${e.ticker}: reports ${e.date}${epsStr}${revStr}`;
+  });
+
+  return `
+━━━ EARNINGS RISK (within 7 days) ━━━
+${lines.join('\n')}
+For options: note IV crush risk post-earnings. For stocks: tighten stops 50% or avoid holding through report.
+`;
+}
+
+function buildIntradaySection(intradayData: Record<string, Candle[]>): string {
+  const entries = Object.entries(intradayData).filter(([, c]) => c.length > 0);
+  if (entries.length === 0) return '';
+  const lines = entries.map(([ticker, candles]) => summarizeIntradayCandles(ticker, candles));
+  return `\nINTRADAY CONTEXT (1h bars, last 2 trading days):\n${lines.join('\n')}\n`;
+}
+
+function buildScanPrompt(buyingPower: number | null): string {
+  const hasBP = buyingPower && buyingPower > 0;
+  const maxRisk = hasBP ? (buyingPower! * 0.02).toFixed(2) : null;
+
+  const bpSection = hasBP
+    ? `\nBUYING POWER & SIZING:\n- Available: $${buyingPower!.toLocaleString()} | Max risk/trade: 2% = $${maxRisk}\n- shares = $${maxRisk} / (entry − stop) | contracts = $${maxRisk} / (premium × 100)\n- Return exact share/contract counts, maxRisk and potentialGain in dollars.\n`
+    : `\nSIZING: No buying power given. Use "size to 2% account risk" as positionSize.\n`;
+
+  return `You are a senior professional swing trader with 20 years of experience at a top-tier hedge fund. You combine rigorous technical analysis, macro awareness, news catalysts, and social sentiment to surface the highest-conviction setups available right now.
+${bpSection}
+━━━ HOW TO READ THE DATA ━━━
+Each stock block contains:
+1. WEEKLY (3 bars): Establishes the multi-week trend direction
+2. DAILY (5 bars): Format — DATE O[open] H[high] L[low] C[close] V[millions] | change% | candle type | body strength | vol ratio
+3. VWAP: Today's volume-weighted average price — above=bullish intraday bias, below=bearish
+4. PRE-MARKET: Gap direction and magnitude before open (if available)
+5. INTRADAY (1h, 2 days): Fine-grained momentum and entry timing
+
+━━━ BULLISH PATTERNS (LONG / CALL) ━━━
+• Bullish Engulfing — green body fully engulfs prior red body at support. Requires vol ≥1.3× avg.
+• Hammer / Pin Bar — lower wick ≥2× body, closes near high, at support. Rejection of lower prices.
+• Morning Star — 3-candle: bearish → indecision doji → bullish (closes >50% into first candle).
+• Inside Bar Breakout — consolidation within prior bar. Breakout on volume = directional confirmation.
+• EMA/Support Bounce — dips to key level, bounces with bullish candle + volume. Clean R:R.
+• Cup & Handle / Base Breakout — multi-day base, then volume-confirmed break above resistance.
+• Gap-and-hold — pre-market gap up, consolidates above gap level, does not fill → continuation.
+
+━━━ BEARISH PATTERNS (SHORT / PUT) ━━━
+• Bearish Engulfing — red body engulfs prior green at resistance. Vol ≥1.3× avg.
+• Shooting Star / Gravestone Doji — upper wick ≥2× body, closes near low, at resistance.
+• Evening Star — 3-candle topping reversal at highs.
+• Distribution Day — high-volume red day near recent highs. Institutional distribution.
+• Resistance Failure — multiple tests of resistance, each rejected. Exhaustion pattern.
+• Gap-and-fail — opens above resistance, fades back below on volume. Trapped longs.
+
+━━━ MANDATORY QUALITY FILTERS (any failure = reject) ━━━
+1. Risk/Reward ≥ 2:1 — target distance ≥ 2× stop distance. No exceptions.
+2. Volume confirmation — signal candle must have vol ≥ average. Low-vol breakouts are traps.
+3. Trend alignment — direction must match 3-5 day trend OR clear reversal pattern present.
+4. No overextension — LONG: price not >12% above nearest support. SHORT: not >12% below resistance.
+5. Sector cap — max 3 stocks per sector per scan. Quality over quantity.
+6. Confidence floor — minimum 58. Below this: exclude entirely.
+7. Macro alignment — if regime is RISK_OFF, require additional confirmation for any LONG setup.
+
+━━━ CONFIDENCE SCORING (58–100) ━━━
+• 88–100: Pattern + high volume + news catalyst + trend + clean S/R + macro aligned. Rare.
+• 75–87: Pattern + volume + (news OR trend alignment). Strong setup.
+• 65–74: Clear pattern + average volume. Decent, size conservatively.
+• 58–64: Pattern present, 1–2 weak confirming factors. Include only if no better options.
+
+Adjustments:
++12 : High-impact news directly confirms direction (earnings beat, major catalyst)
++8  : Medium-impact news confirms direction | SPY/QQQ 3-5d trend confirms direction
++5  : Social sentiment (StockTwits or Reddit) aligns with direction
+−5  : Social sentiment contradicts direction
+−8  : SPY/QQQ trend opposes direction | Medium-impact adverse news
+−10 : Regime opposes direction (RISK_OFF on LONG, RISK_ON on SHORT)
+−15 : High-impact news contradicts direction (note conflict in rationale)
+−8  : Earnings within 3 days (flag as high risk, note IV/gap risk)
++3  : Pre-market gap confirms direction (gap up for LONG, gap down for SHORT)
+−5  : Pre-market gap opposes direction
+
+VWAP guidance:
+• Price above VWAP → bullish intraday bias → +3 for LONG, −3 for SHORT
+• Price below VWAP → bearish intraday bias → +3 for SHORT, −3 for LONG
+
+━━━ OPTIONS vs STOCK ━━━
+Use CALL/PUT when: confidence ≥ 75, expecting sharp/fast move, clear catalyst, or limited capital.
+Use LONG/SHORT when: steady grind expected, confidence 58-74, options premiums unfavorable.
+
+━━━ OUTPUT FORMAT ━━━
+Return ONLY a valid JSON array. No markdown, no text before or after.
+[{
+  "ticker": string,
+  "direction": "LONG"|"SHORT"|"CALL"|"PUT",
+  "confidence": number (58-100),
+  "entryZone": string ("$X.XX - $Y.YY" — tight range near current price or breakout level),
+  "stopLoss": string ("$X.XX" — technical invalidation, not arbitrary),
+  "target": string ("$X.XX" — next key S/R, must give ≥2:1 R:R),
+  "timeframe": string ("1-2 days"),
+  "rationale": string (3 sentences: name the pattern, cite confirming signals including macro/news/social, explain entry timing using VWAP/intraday context),
+  "pattern": string (specific name, e.g. "Bullish Engulfing at 50-day Support"),
+  "positionSize": string,
+  "maxRisk": string,
+  "potentialGain": string
+}]`;
+}
+
+// ─── Build per-batch user message ────────────────────────────────────────────
+
+function buildUserMessage(
+  batchEntries: [string, Candle[]][],
+  weeklyData: Record<string, Candle[]>,
+  intradayData: Record<string, Candle[]>,
+  premarketData: Record<string, Candle[]>,
+  vwapMap: Record<string, number>,
+  macroRegime: MacroRegime | null,
+  scoredNews: ScoredNewsItem[],
+  economicEvents: EconomicEvent[],
+  earningsEvents: EarningsEvent[],
+  stockTwitsSentiment: SentimentMap,
+  redditSentiment: Record<string, RedditSentimentEntry>,
+  buyingPower: number | null,
+  focusSection: string,
+  analysisDate: string
+): string {
+  // Build per-stock blocks
+  const stockBlocks = batchEntries.map(([ticker, candles]) => {
+    const daily = summarizeCandles(ticker, candles);
+    const weekly = weeklyData[ticker] ? summarizeWeeklyCandles(ticker, weeklyData[ticker]) : '';
+    const intraday = intradayData[ticker] ? summarizeIntradayCandles(ticker, intradayData[ticker]) : '';
+    const premarket = premarketData[ticker] ? summarizePremarket(ticker, premarketData[ticker]) : '';
+    const vwap = vwapMap[ticker] ? `${ticker} VWAP(today): $${vwapMap[ticker].toFixed(2)}` : '';
+
+    return [weekly, daily, vwap, premarket, intraday].filter(Boolean).join('\n');
+  }).join('\n\n');
+
+  // Social sentiment block
+  const socialSection = [
+    buildStockTwitsSection(stockTwitsSentiment),
+    buildRedditSection(redditSentiment),
+  ].filter(Boolean).join('');
+
+  return `Analysis date: ${analysisDate}
 Stocks to analyze: ${batchEntries.length}
 ${buyingPower ? `Buying power: $${buyingPower.toLocaleString()}` : ''}
 ${focusSection}
-STOCK CANDLE DATA (5 days each):
-${stockSummaries}
+${buildMacroSection(macroRegime)}
+${buildEconomicCalendarSection(economicEvents)}
+${buildScoredNewsSection(scoredNews)}
+${buildEarningsSection(earningsEvents)}
+━━━ STOCK DATA ━━━
+${stockBlocks}
+━━━ SOCIAL SENTIMENT ━━━
+${socialSection || 'No social data available for this batch.'}
+Analyze the above and return your highest-conviction swing trade setups as a JSON array.`;
+}
 
-RECENT NEWS (ticker-specific + broad market):
-${allNews.join('\n')}
-${sentimentSection}${finnhubSection}${earningsSection}${intradaySection}
-Analyze the above data and return your swing trade recommendations as a JSON array.`;
+// ─── Main scan: analyze all candles (non-streaming) ─────────────────────────
+
+export async function analyzeCandlesWithClaude(
+  candleData: Record<string, Candle[]>,
+  weeklyData: Record<string, Candle[]>,
+  intradayData: Record<string, Candle[]>,
+  premarketData: Record<string, Candle[]>,
+  vwapMap: Record<string, number>,
+  macroRegime: MacroRegime | null,
+  scoredNews: ScoredNewsItem[],
+  economicEvents: EconomicEvent[],
+  earningsEvents: EarningsEvent[],
+  stockTwitsSentiment: SentimentMap,
+  redditSentiment: Record<string, RedditSentimentEntry>,
+  buyingPower: number | null = null,
+  focusDirections: string[] = []
+): Promise<TradeRecommendation[] | null> {
+  if (!hasAnthropicKey()) return null;
+
+  const client = getClient();
+  const systemPrompt = buildScanPrompt(buyingPower);
+  const analysisDate = new Date().toISOString().split('T')[0];
+  const focusSection = focusDirections.length > 0
+    ? `\nSCAN FOCUS (STRICT): Return ONLY setups where direction ∈ {${focusDirections.join(', ')}}. No exceptions. Be thorough — return every qualifying setup within allowed types.\n`
+    : '';
+
+  const entries = Object.entries(candleData);
+  const mid = Math.ceil(entries.length / 2);
+
+  const makeMsg = (batch: [string, Candle[]][]) =>
+    buildUserMessage(batch, weeklyData, intradayData, premarketData, vwapMap,
+      macroRegime, scoredNews, economicEvents, earningsEvents,
+      stockTwitsSentiment, redditSentiment, buyingPower, focusSection, analysisDate);
 
   try {
-    const message = await client.messages.create({
+    const [r1, r2] = await Promise.all([
+      client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: makeMsg(entries.slice(0, mid)) }],
+      }),
+      entries.slice(mid).length > 0
+        ? client.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 8192,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: makeMsg(entries.slice(mid)) }],
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const parse = (msg: Anthropic.Message | null): TradeRecommendation[] => {
+      if (!msg) return [];
+      const raw = msg.content[0].type === 'text' ? msg.content[0].text : '';
+      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      try { return JSON.parse(cleaned) as TradeRecommendation[]; }
+      catch { return []; }
+    };
+
+    const merged = [...parse(r1), ...parse(r2)];
+    const seen = new Set<string>();
+    const deduped = merged.filter(r => { if (seen.has(r.ticker)) return false; seen.add(r.ticker); return true; });
+    const sorted = deduped.sort((a, b) => b.confidence - a.confidence);
+
+    if (focusDirections.length > 0) return sorted.filter(r => focusDirections.includes(r.direction));
+    return sorted;
+  } catch (err) {
+    console.error('[claude] Scan error:', err);
+    return null;
+  }
+}
+
+// ─── Streaming batch analysis ────────────────────────────────────────────────
+
+export async function analyzeBatchWithClaude(
+  batchEntries: [string, Candle[]][],
+  weeklyData: Record<string, Candle[]>,
+  intradayData: Record<string, Candle[]>,
+  premarketData: Record<string, Candle[]>,
+  vwapMap: Record<string, number>,
+  macroRegime: MacroRegime | null,
+  scoredNews: ScoredNewsItem[],
+  economicEvents: EconomicEvent[],
+  earningsEvents: EarningsEvent[],
+  stockTwitsSentiment: SentimentMap,
+  redditSentiment: Record<string, RedditSentimentEntry>,
+  buyingPower: number | null,
+  focusDirections: string[]
+): Promise<TradeRecommendation[]> {
+  if (!hasAnthropicKey() || batchEntries.length === 0) return [];
+
+  const client = getClient();
+  const focusSection = focusDirections.length > 0
+    ? `\nSCAN FOCUS (STRICT): Return ONLY setups where direction ∈ {${focusDirections.join(', ')}}. No exceptions.\n`
+    : '';
+
+  const userMsg = buildUserMessage(
+    batchEntries, weeklyData, intradayData, premarketData, vwapMap,
+    macroRegime, scoredNews, economicEvents, earningsEvents,
+    stockTwitsSentiment, redditSentiment, buyingPower, focusSection,
+    new Date().toISOString().split('T')[0]
+  );
+
+  try {
+    const msg = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
       system: buildScanPrompt(buyingPower),
-      messages: [{ role: 'user', content: userMessage }],
+      messages: [{ role: 'user', content: userMsg }],
     });
 
-    const rawText = message.content[0].type === 'text' ? message.content[0].text : '';
-    const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const raw = msg.content[0].type === 'text' ? msg.content[0].text : '';
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleaned) as TradeRecommendation[];
 
-    if (focusDirections.length > 0) {
-      return parsed.filter(r => focusDirections.includes(r.direction));
-    }
+    if (focusDirections.length > 0) return parsed.filter(r => focusDirections.includes(r.direction));
     return parsed;
   } catch (err) {
-    console.error('Claude batch scan error:', err);
+    console.error('[claude] Batch scan error:', err);
     return [];
   }
+}
+
+// ─── Position monitoring verdict ─────────────────────────────────────────────
+
+function buildPositionPrompt(): string {
+  return `You are a professional swing trader managing open positions at a hedge fund. Issue clear, decisive verdicts.
+
+VERDICT DEFINITIONS:
+• HOLD — Price action and thesis intact. Original setup playing out. No action needed.
+• CAUTION — Something has changed (adverse candle, volume shift, news) threatening the position. Consider tightening stop or reducing size. Monitor closely.
+• SELL — Exit now. Stop triggered, thesis broken, or strong reversal against position.
+
+DECISION FRAMEWORK:
+LONG positions:
+- HOLD: price above entry or at entry with constructive candle, volume declining on pullback, thesis intact
+- CAUTION: approaching stop, bearish candle on elevated volume, adverse news, or up >50% of target (consider partial)
+- SELL: stop hit, bearish engulfing on high volume, thesis-breaking news, no new high after 2 days
+
+SHORT positions:
+- HOLD: price below entry, bounces weak/low volume, trend intact
+- CAUTION: approaching stop, bullish reversal candle, unexpected positive news
+- SELL: stop hit, bullish engulfing on high volume, strong gap up
+
+PROFIT GUIDANCE:
+- Up >75% of target → recommend partial profit (50%) in reasoning
+- Held 3+ days without hitting target → evaluate momentum stall
+
+Return ONLY valid JSON (no markdown):
+{
+  "verdict": "HOLD"|"SELL"|"CAUTION",
+  "reasoning": string (2-3 sentences: what you see in price action, why this call, what to watch),
+  "currentPrice": string ("$XXX.XX"),
+  "priceChange": string ("+X.XX%" or "-X.XX%")
+}`;
 }
 
 export async function analyzePositionWithClaude(
@@ -451,8 +590,7 @@ export async function analyzePositionWithClaude(
 ): Promise<PositionUpdate | null> {
   if (!hasAnthropicKey()) return null;
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
+  const client = getClient();
   const latestCandle = candles[candles.length - 1];
   const currentPrice = latestCandle?.c ?? 0;
   const prevCandle = candles.length >= 2 ? candles[candles.length - 2] : latestCandle;
@@ -462,8 +600,8 @@ export async function analyzePositionWithClaude(
   const pnlPct = ((currentPrice - position.entryPrice) / position.entryPrice * 100 *
     (position.direction === 'short' ? -1 : 1)).toFixed(2);
 
-  const candleSummary = summarizeCandles(position.ticker, candles);
-  const newsHeadlines = news.slice(0, 5).map(n => `• ${n.headline} (${n.source})`).join('\n');
+  const stopLine = position.stopLoss != null ? `Stop loss: $${position.stopLoss.toFixed(2)}` : '';
+  const targetLine = position.target != null ? `Target: $${position.target.toFixed(2)}` : '';
 
   const userMessage = `OPEN POSITION:
 Ticker: ${position.ticker}
@@ -472,35 +610,36 @@ Entry price: $${position.entryPrice.toFixed(2)}
 Current price: $${currentPrice.toFixed(2)}
 Unrealized P&L: ${pnlPct}%
 Time held: since ${position.entryTime}
+${stopLine}
+${targetLine}
 
 RECENT CANDLES:
-${candleSummary}
+${summarizeCandles(position.ticker, candles)}
 
 RECENT NEWS:
-${newsHeadlines || 'No recent news'}
+${news.slice(0, 5).map(n => `• ${n.headline} (${n.source})`).join('\n') || 'No recent news'}
 
 Evaluate this position and return your verdict as JSON.`;
 
   try {
-    const message = await client.messages.create({
+    const msg = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       system: buildPositionPrompt(),
       messages: [{ role: 'user', content: userMessage }],
     });
 
-    const rawText = message.content[0].type === 'text' ? message.content[0].text : '';
-    const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const raw = msg.content[0].type === 'text' ? msg.content[0].text : '';
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleaned) as PositionUpdate;
 
-    // Ensure priceChange is formatted correctly if Claude omitted the sign
     if (parsed.priceChange && !parsed.priceChange.startsWith('+') && !parsed.priceChange.startsWith('-')) {
       parsed.priceChange = (priceChange >= 0 ? '+' : '') + priceChange.toFixed(2) + '%';
     }
 
     return parsed;
   } catch (err) {
-    console.error('Claude position update error:', err);
+    console.error('[claude] Position update error:', err);
     return null;
   }
 }

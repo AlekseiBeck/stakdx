@@ -139,8 +139,8 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     }
   };
 
-  const handleAddPosition = async (ticker: string, entryPrice: number, direction: 'long' | 'short') => {
-    const newPos = await addPosition(ticker, entryPrice, direction);
+  const handleAddPosition = async (ticker: string, entryPrice: number, direction: 'long' | 'short', stopLoss?: number, target?: number) => {
+    const newPos = await addPosition(ticker, entryPrice, direction, stopLoss, target);
     setPositions((prev) => [...prev, newPos]);
   };
 

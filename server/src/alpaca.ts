@@ -411,4 +411,141 @@ function mapNews(raw: Array<{
   }));
 }
 
+// ─── Weekly Candles ──────────────────────────────────────────────────────────
+// Fetches last 3 weekly candles for broader trend context
+
+export async function fetchWeeklyCandles(
+  tickers: string[]
+): Promise<Record<string, Candle[]> | null> {
+  if (!hasAlpacaKeys()) return null;
+
+  const endpoint = process.env.ALPACA_ENDPOINT || 'https://data.alpaca.markets';
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 28); // 4 weeks back gives us 3+ weekly bars
+
+  try {
+    const response = await axios.get(`${endpoint}/v2/stocks/bars`, {
+      headers: getAlpacaHeaders(),
+      params: {
+        symbols: tickers.join(','),
+        timeframe: '1Week',
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0],
+        limit: 200,
+        feed: 'iex',
+      },
+    });
+
+    const bars = response.data.bars as Record<string, Candle[]>;
+    const trimmed: Record<string, Candle[]> = {};
+    for (const [ticker, candles] of Object.entries(bars)) {
+      trimmed[ticker] = candles.slice(-3); // Last 3 weeks
+    }
+    return trimmed;
+  } catch (err) {
+    console.error('Alpaca weekly candles error:', err);
+    return null;
+  }
+}
+
+// ─── Pre-market Candles ──────────────────────────────────────────────────────
+// 15-minute bars covering today's pre-market session (4am–9:30am ET)
+// Note: availability depends on Alpaca subscription tier; fails gracefully.
+
+export async function fetchPremarketCandles(
+  tickers: string[]
+): Promise<Record<string, Candle[]> | null> {
+  if (!hasAlpacaKeys()) return null;
+
+  const endpoint = process.env.ALPACA_ENDPOINT || 'https://data.alpaca.markets';
+
+  // Today from 4am ET (8am UTC) to now
+  const today = new Date().toISOString().split('T')[0];
+
+  try {
+    const response = await axios.get(`${endpoint}/v2/stocks/bars`, {
+      headers: getAlpacaHeaders(),
+      params: {
+        symbols: tickers.slice(0, 20).join(','),
+        timeframe: '15Min',
+        start: `${today}T08:00:00Z`,  // 4am ET = 8am UTC
+        end: `${today}T13:30:00Z`,    // 9:30am ET = 13:30 UTC
+        limit: 200,
+        feed: 'iex',
+      },
+    });
+
+    const bars = response.data.bars as Record<string, Candle[]>;
+    const result: Record<string, Candle[]> = {};
+    for (const [ticker, candles] of Object.entries(bars)) {
+      if (candles.length > 0) result[ticker] = candles;
+    }
+    return Object.keys(result).length > 0 ? result : null;
+  } catch {
+    // Free-tier IEX feed may not support extended hours — silently skip
+    return null;
+  }
+}
+
+// ─── VWAP Computation ────────────────────────────────────────────────────────
+// Computes today's VWAP from intraday 1h candles.
+// VWAP = Σ(typicalPrice × volume) / Σ(volume) where typicalPrice = (H+L+C)/3
+
+function computeVWAP(candles: Candle[]): number | null {
+  if (candles.length === 0) return null;
+
+  // Use only today's candles
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayCandles = candles.filter(c => c.t.startsWith(todayStr));
+  if (todayCandles.length === 0) return null;
+
+  let numerator = 0;
+  let denominator = 0;
+  for (const c of todayCandles) {
+    const typicalPrice = (c.h + c.l + c.c) / 3;
+    numerator += typicalPrice * c.v;
+    denominator += c.v;
+  }
+  return denominator > 0 ? numerator / denominator : null;
+}
+
+// Compute VWAP for all tickers in an intraday candle map
+export function computeVWAPMap(
+  intradayData: Record<string, Candle[]>
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const [ticker, candles] of Object.entries(intradayData)) {
+    const vwap = computeVWAP(candles);
+    if (vwap != null) result[ticker] = vwap;
+  }
+  return result;
+}
+
+// Summarize pre-market candles for a ticker into a compact string
+export function summarizePremarket(ticker: string, candles: Candle[]): string {
+  if (candles.length === 0) return '';
+
+  const first = candles[0];
+  const last = candles[candles.length - 1];
+  const pmChange = ((last.c - first.o) / first.o * 100).toFixed(2);
+  const direction = parseFloat(pmChange) >= 0 ? '+' : '';
+  const high = Math.max(...candles.map(c => c.h)).toFixed(2);
+  const low = Math.min(...candles.map(c => c.l)).toFixed(2);
+
+  return `${ticker} pre-mkt: ${direction}${pmChange}% | H:$${high} L:$${low} | Last:$${last.c.toFixed(2)}`;
+}
+
+// Summarize weekly candles for a ticker into a compact string
+export function summarizeWeeklyCandles(ticker: string, candles: Candle[]): string {
+  if (candles.length === 0) return '';
+
+  const lines = candles.map(c => {
+    const dir = c.c >= c.o ? 'bull' : 'bear';
+    const chg = ((c.c - c.o) / c.o * 100).toFixed(1);
+    return `wk:${c.t.split('T')[0]} O${c.o.toFixed(0)} C${c.c.toFixed(0)} ${chg}% ${dir}`;
+  });
+  return `${ticker} weekly(3wk): ${lines.join(' | ')}`;
+}
+
 export { WATCHLIST, hasAlpacaKeys };

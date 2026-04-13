@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Position } from './types';
+import { Position, StoredPushSubscription } from './types';
 
 let _client: SupabaseClient | null = null;
 
@@ -34,6 +34,10 @@ export async function getPositions(userId: string): Promise<Position[]> {
     entryPrice: row.entry_price,
     entryTime: row.entry_time,
     direction: row.direction,
+    stopLoss: row.stop_loss ?? undefined,
+    target: row.target ?? undefined,
+    notifiedStop: row.notified_stop ?? false,
+    notifiedTarget: row.notified_target ?? false,
   }));
 }
 
@@ -50,6 +54,8 @@ export async function createPosition(userId: string, position: Omit<Position, 'i
       entry_price: position.entryPrice,
       entry_time: position.entryTime,
       direction: position.direction,
+      stop_loss: position.stopLoss ?? null,
+      target: position.target ?? null,
     })
     .select()
     .single();
@@ -62,6 +68,10 @@ export async function createPosition(userId: string, position: Omit<Position, 'i
     entryPrice: data.entry_price,
     entryTime: data.entry_time,
     direction: data.direction,
+    stopLoss: data.stop_loss ?? undefined,
+    target: data.target ?? undefined,
+    notifiedStop: false,
+    notifiedTarget: false,
   };
 }
 
@@ -99,7 +109,45 @@ export async function findPositionByTicker(userId: string, ticker: string): Prom
     entryPrice: data.entry_price,
     entryTime: data.entry_time,
     direction: data.direction,
+    stopLoss: data.stop_loss ?? undefined,
+    target: data.target ?? undefined,
+    notifiedStop: data.notified_stop ?? false,
+    notifiedTarget: data.notified_target ?? false,
   };
+}
+
+export async function getAllPositionsWithAlerts(): Promise<Array<Position & { userId: string }>> {
+  const db = getClient();
+  if (!db) return [];
+
+  const { data, error } = await db
+    .from('positions')
+    .select('*')
+    .not('stop_loss', 'is', null);
+
+  if (error) { console.error('DB getAllPositionsWithAlerts error:', error); return []; }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    ticker: row.ticker,
+    entryPrice: row.entry_price,
+    entryTime: row.entry_time,
+    direction: row.direction,
+    stopLoss: row.stop_loss ?? undefined,
+    target: row.target ?? undefined,
+    notifiedStop: row.notified_stop ?? false,
+    notifiedTarget: row.notified_target ?? false,
+  }));
+}
+
+export async function markPositionNotified(
+  positionId: string,
+  field: 'notified_stop' | 'notified_target'
+): Promise<void> {
+  const db = getClient();
+  if (!db) return;
+  await db.from('positions').update({ [field]: true }).eq('id', positionId);
 }
 
 // Brokerage account storage
@@ -131,4 +179,63 @@ export async function deleteBrokerageAccount(userId: string): Promise<void> {
   const db = getClient();
   if (!db) return;
   await db.from('brokerage_accounts').delete().eq('user_id', userId);
+}
+
+// ─── Push Subscriptions ──────────────────────────────────────────────────────
+
+export async function savePushSubscription(
+  userId: string,
+  endpoint: string,
+  p256dh: string,
+  auth: string
+): Promise<void> {
+  const db = getClient();
+  if (!db) throw new Error('Database not configured');
+  const { error } = await db
+    .from('push_subscriptions')
+    .upsert(
+      { user_id: userId, endpoint, p256dh, auth },
+      { onConflict: 'user_id,endpoint' }
+    );
+  if (error) throw error;
+}
+
+export async function deletePushSubscription(
+  userId: string,
+  endpoint: string
+): Promise<void> {
+  const db = getClient();
+  if (!db) return;
+  await db
+    .from('push_subscriptions')
+    .delete()
+    .eq('user_id', userId)
+    .eq('endpoint', endpoint);
+}
+
+export async function deleteExpiredPushSubscription(subId: string): Promise<void> {
+  const db = getClient();
+  if (!db) return;
+  await db.from('push_subscriptions').delete().eq('id', subId);
+}
+
+export async function getPushSubscriptionsForUser(
+  userId: string
+): Promise<StoredPushSubscription[]> {
+  const db = getClient();
+  if (!db) return [];
+  const { data } = await db
+    .from('push_subscriptions')
+    .select('*')
+    .eq('user_id', userId);
+  return (data ?? []) as StoredPushSubscription[];
+}
+
+export async function getAllPushSubscriptions(): Promise<
+  Array<StoredPushSubscription & { user_id: string }>
+> {
+  const db = getClient();
+  if (!db) return [];
+  const { data } = await db.from('push_subscriptions').select('*');
+  return (data ?? []) as Array<StoredPushSubscription & { user_id: string }>;
 }

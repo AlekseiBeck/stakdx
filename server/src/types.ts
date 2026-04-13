@@ -29,6 +29,10 @@ export interface Position {
   entryPrice: number;
   entryTime: string;
   direction: 'long' | 'short';
+  stopLoss?: number;
+  target?: number;
+  notifiedStop?: boolean;
+  notifiedTarget?: boolean;
 }
 
 export interface PositionUpdate {
@@ -45,4 +49,72 @@ export interface Candle {
   l: number;
   c: number;
   v: number;
+}
+
+// ─── Macro Regime ───────────────────────────────────────────────────────────
+
+export type MarketRegime = 'RISK_ON' | 'RISK_OFF' | 'MIXED';
+export type FedStance = 'HAWKISH' | 'NEUTRAL' | 'DOVISH';
+
+export interface MacroRegime {
+  regime: MarketRegime;
+  fedStance: FedStance;
+  topRisks: string[];
+  sectorBias: Record<string, 'bullish' | 'bearish' | 'neutral'>;
+  summary: string;
+}
+
+// ─── Pre-scored News ─────────────────────────────────────────────────────────
+
+export type NewsImpact = 'HIGH' | 'MEDIUM' | 'LOW';
+export type NewsDirection = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+export type NewsCategory =
+  | 'earnings'
+  | 'macro'
+  | 'regulatory'
+  | 'product'
+  | 'ma'
+  | 'geopolitical'
+  | 'other';
+
+export interface ScoredNewsItem {
+  headline: string;
+  ticker?: string;
+  source: string;
+  impact: NewsImpact;
+  direction: NewsDirection;
+  category: NewsCategory;
+}
+
+// ─── Reddit Sentiment ────────────────────────────────────────────────────────
+
+export interface RedditSentimentEntry {
+  ticker: string;
+  mentions: number;
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+  topPost: string;
+}
+
+// ─── Economic Calendar ───────────────────────────────────────────────────────
+
+export interface EconomicEvent {
+  event: string;
+  date: string;
+  impact: 'high' | 'medium';
+  country: string;
+}
+
+// ─── Push Notifications ──────────────────────────────────────────────────────
+
+export interface PushSubscriptionKeys {
+  p256dh: string;
+  auth: string;
+}
+
+export interface StoredPushSubscription {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
 }

@@ -4,23 +4,32 @@ import { TradeRecommendation } from '../types';
 interface Props {
   prefill: TradeRecommendation | null;
   onClose: () => void;
-  onAdd: (ticker: string, entryPrice: number, direction: 'long' | 'short') => Promise<void>;
+  onAdd: (ticker: string, entryPrice: number, direction: 'long' | 'short', stopLoss?: number, target?: number) => Promise<void>;
+}
+
+function parseDollarAmount(str: string): string {
+  // Extract first dollar amount from strings like "$178.20" or "$875.00 - $880.00"
+  const match = str.match(/\$([0-9,.]+)/);
+  return match ? match[1].replace(',', '') : '';
 }
 
 export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
   const [ticker, setTicker] = useState('');
   const [entryPrice, setEntryPrice] = useState('');
   const [direction, setDirection] = useState<'long' | 'short'>('long');
+  const [stopLoss, setStopLoss] = useState('');
+  const [target, setTarget] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (prefill) {
       setTicker(prefill.ticker);
-      setDirection(prefill.direction === 'LONG' ? 'long' : 'short');
-      // Parse the low end of the entry zone as default price
-      const match = prefill.entryZone.match(/\$([0-9.]+)/);
-      if (match) setEntryPrice(match[1]);
+      setDirection(prefill.direction === 'LONG' || prefill.direction === 'CALL' ? 'long' : 'short');
+      const entryMatch = prefill.entryZone.match(/\$([0-9,.]+)/);
+      if (entryMatch) setEntryPrice(entryMatch[1].replace(',', ''));
+      setStopLoss(parseDollarAmount(prefill.stopLoss));
+      setTarget(parseDollarAmount(prefill.target));
     }
   }, [prefill]);
 
@@ -32,9 +41,19 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
       setError('Please fill in all fields correctly.');
       return;
     }
+    const stopNum = stopLoss ? parseFloat(stopLoss) : undefined;
+    const targetNum = target ? parseFloat(target) : undefined;
+    if (stopLoss && isNaN(stopNum!)) {
+      setError('Stop loss must be a valid number.');
+      return;
+    }
+    if (target && isNaN(targetNum!)) {
+      setError('Target must be a valid number.');
+      return;
+    }
     setLoading(true);
     try {
-      await onAdd(ticker.toUpperCase(), price, direction);
+      await onAdd(ticker.toUpperCase(), price, direction, stopNum, targetNum);
       onClose();
     } catch {
       setError('Failed to add position. Is the server running?');
@@ -42,6 +61,8 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
       setLoading(false);
     }
   };
+
+  const hasAlerts = stopLoss || target;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -113,6 +134,60 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
                 SHORT
               </button>
             </div>
+          </div>
+
+          {/* Stop loss + target — for push alerts */}
+          <div className="rounded-xl border border-[#1a2442] bg-[#0d1629]/60 p-4 space-y-3">
+            <div className="flex items-center gap-2 mb-0.5">
+              <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+              </svg>
+              <span className="text-xs font-semibold text-blue-400">Alert Levels</span>
+              <span className="text-[10px] text-gray-600 ml-auto">Optional — triggers push notification</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  Stop Loss <span className="text-red-500/70">▼</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 mono text-sm">$</span>
+                  <input
+                    type="number"
+                    value={stopLoss}
+                    onChange={(e) => setStopLoss(e.target.value)}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0.01"
+                    className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg pl-6 pr-2 py-2 text-red-400 mono text-sm focus:outline-none focus:border-red-600/50 transition-colors"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  Target <span className="text-emerald-500/70">▲</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 mono text-sm">$</span>
+                  <input
+                    type="number"
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value)}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0.01"
+                    className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg pl-6 pr-2 py-2 text-emerald-400 mono text-sm focus:outline-none focus:border-emerald-600/50 transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {hasAlerts && (
+              <p className="text-[10px] text-blue-400/60 leading-relaxed">
+                You'll receive a push notification when the price crosses these levels — even with the app closed.
+              </p>
+            )}
           </div>
 
           {error && (

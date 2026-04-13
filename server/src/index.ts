@@ -12,16 +12,49 @@ import {
   scoreTickerForMode,
   fetchStockTwitsSentiment,
   fetchIntradayCandles,
+  fetchWeeklyCandles,
+  fetchPremarketCandles,
+  computeVWAPMap,
 } from './alpaca';
-import { analyzeCandlesWithClaude, analyzeBatchWithClaude, analyzePositionWithClaude } from './claude';
-import { fetchFinnhubNews, fetchUpcomingEarnings } from './finnhub';
+import {
+  analyzeCandlesWithClaude,
+  analyzeBatchWithClaude,
+  analyzePositionWithClaude,
+  classifyMacroRegime,
+  scoreNewsImpact,
+} from './claude';
+import { fetchFinnhubNews, fetchUpcomingEarnings, fetchEconomicCalendar } from './finnhub';
+import { fetchRedditSentiment } from './reddit';
 import { MOCK_RECOMMENDATIONS, MOCK_NEWS, MOCK_POSITION_UPDATE } from './mockData';
 import { requireAuth, AuthRequest } from './auth';
-import { hasDatabase, getPositions, createPosition, deletePosition, findPositionByTicker, getBrokerageAccount, saveBrokerageAccount, deleteBrokerageAccount } from './db';
-import { Position } from './types';
+import {
+  hasDatabase,
+  getPositions,
+  createPosition,
+  deletePosition,
+  findPositionByTicker,
+  getBrokerageAccount,
+  saveBrokerageAccount,
+  deleteBrokerageAccount,
+  getAllPositionsWithAlerts,
+  markPositionNotified,
+  savePushSubscription,
+  deletePushSubscription,
+  deleteExpiredPushSubscription,
+  getPushSubscriptionsForUser,
+} from './db';
+import { Position, MacroRegime, ScoredNewsItem, NewsItem, Candle } from './types';
+import type { EarningsEvent, EconomicEvent } from './finnhub';
 import { encrypt, decrypt } from './encryption';
-import { fetchAccount, fetchPositions as fetchAlpacaPositions, fetchOrders, placeOrder, cancelOrder } from './brokerage';
+import {
+  fetchAccount,
+  fetchPositions as fetchAlpacaPositions,
+  fetchOrders,
+  placeOrder,
+  cancelOrder,
+} from './brokerage';
 import { WATCHLIST } from './alpaca';
+import { initWebPush, hasVapidKeys, sendToUser } from './notifications';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
@@ -33,10 +66,119 @@ const allowedOrigins = process.env.CLIENT_URL
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
 
-// Fallback in-memory store (used when Supabase is not configured)
+// Initialize web push on startup
+initWebPush();
+
+// In-memory fallback positions store (no DB)
 const memPositions = new Map<string, Position & { userId: string }>();
 
-// GET /api/scan
+// ─── ETFs to exclude from Finnhub news (not companies) ───────────────────────
+const ETF_TICKERS = new Set([
+  'SPY','QQQ','IWM','DIA','XLK','XLF','XLE','XLV','XLC','XLRE','XLI','XLU','XLB','XLP','XLY',
+  'TQQQ','SQQQ','SOXS','SOXL','TNA','TZA','ARKG',
+]);
+
+// ─── Shared scan pipeline ─────────────────────────────────────────────────────
+// Used by both /api/scan and /api/scan/stream to avoid code duplication.
+
+async function runScanPipeline(
+  scanMode: 'long' | 'short' | 'both'
+): Promise<{
+  candles: Record<string, Candle[]> | null;
+  topTickers: string[];
+  topCandles: Record<string, Candle[]>;
+  weeklyData: Record<string, Candle[]>;
+  intradayData: Record<string, Candle[]>;
+  premarketData: Record<string, Candle[]>;
+  vwapMap: Record<string, number>;
+  macroRegime: MacroRegime | null;
+  scoredNews: ScoredNewsItem[];
+  stockTwitsSentiment: Record<string, any>;
+  redditSentiment: Record<string, any>;
+  earningsData: EarningsEvent[];
+  economicEvents: EconomicEvent[];
+  prices: Record<string, number>;
+  newsItems: NewsItem[];
+  marketNews: NewsItem[];
+}> {
+  const stockTickers = WATCHLIST.filter(t => !ETF_TICKERS.has(t));
+
+  // ── Phase 1: fetch all raw data in parallel ──────────────────────────────
+  const [candles, news, marketNews, prices, finnhubNewsData, earningsData, economicEvents] =
+    await Promise.all([
+      fetchCandles(),
+      fetchNews(),
+      fetchMarketNews(),
+      fetchLatestPrices(),
+      fetchFinnhubNews(stockTickers.slice(0, 10)),
+      fetchUpcomingEarnings(WATCHLIST),
+      fetchEconomicCalendar(),
+    ]);
+
+  const newsItems = news ?? MOCK_NEWS;
+
+  if (!candles) {
+    return {
+      candles: null, topTickers: [], topCandles: {}, weeklyData: {}, intradayData: {},
+      premarketData: {}, vwapMap: {}, macroRegime: null, scoredNews: [],
+      stockTwitsSentiment: {}, redditSentiment: {}, earningsData, economicEvents,
+      prices: prices ?? {}, newsItems, marketNews,
+    };
+  }
+
+  // ── Phase 2: pre-filter top 30 tickers ──────────────────────────────────
+  const scored = Object.entries(candles)
+    .map(([ticker, c]) => ({ ticker, score: scoreTickerForMode(c, scanMode) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 30);
+
+  const topTickers = scored.map(s => s.ticker);
+  const topCandles: Record<string, typeof candles[string]> = {};
+  for (const { ticker } of scored) topCandles[ticker] = candles[ticker];
+
+  console.log(`[scan] mode=${scanMode} → top ${topTickers.length}: ${topTickers.join(', ')}`);
+
+  // Combine all news for scoring
+  const allNewsForScoring = [
+    ...newsItems.map(n => ({ headline: n.headline, ticker: n.symbols[0], source: n.source })),
+    ...finnhubNewsData.map(n => ({ headline: n.headline, ticker: n.ticker, source: n.source })),
+  ];
+
+  // ── Phase 3: enrich data + run Haiku analysis layers in parallel ─────────
+  const spyCandles = candles['SPY'] ?? [];
+  const qqqCandles = candles['QQQ'] ?? [];
+
+  const [
+    macroRegime,
+    scoredNews,
+    stockTwitsSentiment,
+    intradayCandles,
+    premarketCandles,
+    weeklyCandles,
+    redditSentiment,
+  ] = await Promise.all([
+    classifyMacroRegime(spyCandles, qqqCandles, marketNews, economicEvents),
+    scoreNewsImpact(allNewsForScoring),
+    fetchStockTwitsSentiment(topTickers.slice(0, 15)),
+    fetchIntradayCandles(topTickers.slice(0, 20)),
+    fetchPremarketCandles(topTickers.slice(0, 20)),
+    fetchWeeklyCandles(topTickers),
+    fetchRedditSentiment(topTickers),
+  ]);
+
+  const intradayData = intradayCandles ?? {};
+  const premarketData = premarketCandles ?? {};
+  const weeklyData = weeklyCandles ?? {};
+  const vwapMap = computeVWAPMap(intradayData);
+
+  return {
+    candles, topTickers, topCandles, weeklyData, intradayData, premarketData, vwapMap,
+    macroRegime, scoredNews, stockTwitsSentiment, redditSentiment,
+    earningsData, economicEvents, prices: prices ?? {}, newsItems, marketNews,
+  };
+}
+
+// ─── GET /api/scan ────────────────────────────────────────────────────────────
 app.get('/api/scan', requireAuth, async (req, res) => {
   const buyingPower = req.query.buyingPower ? parseFloat(req.query.buyingPower as string) : null;
   const focusDirections = req.query.directions
@@ -46,65 +188,40 @@ app.get('/api/scan', requireAuth, async (req, res) => {
   const scanMode = (mode === 'long' || mode === 'short') ? mode : 'both';
 
   try {
-    const [candles, news, marketNews, prices, finnhubNewsData, earningsData] = await Promise.all([
-      fetchCandles(),
-      fetchNews(),
-      fetchMarketNews(),
-      fetchLatestPrices(),
-      fetchFinnhubNews(WATCHLIST.filter(t => !['SPY','QQQ','IWM','DIA','XLK','XLF','XLE','XLV','XLC','XLRE','XLI','XLU','XLB','XLP','XLY','TQQQ','SQQQ','SOXS','SOXL','TNA','TZA'].includes(t)).slice(0, 10)),
-      fetchUpcomingEarnings(WATCHLIST),
-    ]);
+    const pipeline = await runScanPipeline(scanMode);
 
-    if (!candles) {
+    if (!pipeline.candles) {
       return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: {}, mock: true });
     }
 
-    // Pre-filter: score all tickers using mode-aware scoring, keep top 30
-    const scored = Object.entries(candles)
-      .map(([ticker, c]) => ({ ticker, score: scoreTickerForMode(c, scanMode) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 30);
-
-    const topCandles: Record<string, typeof candles[string]> = {};
-    for (const { ticker } of scored) {
-      topCandles[ticker] = candles[ticker];
-    }
-
-    console.log(`[scan] mode=${scanMode} Pre-filtered ${Object.keys(candles).length} tickers → top ${scored.length}: ${scored.map(s => s.ticker).join(', ')}`);
-
-    const topTickers = scored.map(s => s.ticker);
-
-    // Fetch StockTwits sentiment and intraday candles for top tickers
-    const [stockTwitsSentiment, intradayCandles] = await Promise.all([
-      fetchStockTwitsSentiment(topTickers.slice(0, 15)),
-      fetchIntradayCandles(topTickers.slice(0, 20)),
-    ]);
-
-    const newsItems = news ?? MOCK_NEWS;
     const recommendations = await analyzeCandlesWithClaude(
-      topCandles,
-      newsItems,
-      marketNews,
+      pipeline.topCandles,
+      pipeline.weeklyData,
+      pipeline.intradayData,
+      pipeline.premarketData,
+      pipeline.vwapMap,
+      pipeline.macroRegime,
+      pipeline.scoredNews,
+      pipeline.economicEvents,
+      pipeline.earningsData,
+      pipeline.stockTwitsSentiment,
+      pipeline.redditSentiment,
       buyingPower,
-      focusDirections,
-      stockTwitsSentiment,
-      finnhubNewsData,
-      earningsData,
-      intradayCandles ?? {}
+      focusDirections
     );
 
     if (!recommendations) {
-      return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: prices ?? {}, mock: true });
+      return res.json({ recommendations: MOCK_RECOMMENDATIONS, prices: pipeline.prices, mock: true });
     }
 
-    return res.json({ recommendations, prices: prices ?? {}, mock: false });
+    return res.json({ recommendations, prices: pipeline.prices, mock: false });
   } catch (err) {
     console.error('[scan] Error:', err);
     return res.status(500).json({ recommendations: MOCK_RECOMMENDATIONS, mock: true });
   }
 });
 
-// GET /api/scan/stream — SSE streaming endpoint
+// ─── GET /api/scan/stream — SSE streaming ────────────────────────────────────
 app.get('/api/scan/stream', requireAuth, async (req: AuthRequest, res) => {
   const buyingPower = req.query.buyingPower ? parseFloat(req.query.buyingPower as string) : null;
   const focusDirections = req.query.directions
@@ -113,96 +230,66 @@ app.get('/api/scan/stream', requireAuth, async (req: AuthRequest, res) => {
   const mode = (req.query.mode as string | undefined) ?? 'both';
   const scanMode = (mode === 'long' || mode === 'short') ? mode : 'both';
 
-  // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const sendEvent = (data: object) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
+  const sendEvent = (data: object) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
   try {
-    const [candles, news, marketNews, prices, finnhubNewsData, earningsData] = await Promise.all([
-      fetchCandles(),
-      fetchNews(),
-      fetchMarketNews(),
-      fetchLatestPrices(),
-      fetchFinnhubNews(WATCHLIST.filter(t => !['SPY','QQQ','IWM','DIA','XLK','XLF','XLE','XLV','XLC','XLRE','XLI','XLU','XLB','XLP','XLY','TQQQ','SQQQ','SOXS','SOXL','TNA','TZA'].includes(t)).slice(0, 10)),
-      fetchUpcomingEarnings(WATCHLIST),
-    ]);
+    const pipeline = await runScanPipeline(scanMode);
 
-    if (!candles) {
+    if (!pipeline.candles) {
       sendEvent({ recommendations: MOCK_RECOMMENDATIONS, done: true, prices: {}, mock: true });
       res.end();
       return;
     }
 
-    // Pre-filter with mode-aware scoring
-    const scored = Object.entries(candles)
-      .map(([ticker, c]) => ({ ticker, score: scoreTickerForMode(c, scanMode) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 30);
+    const { topTickers, topCandles, weeklyData, intradayData, premarketData, vwapMap,
+      macroRegime, scoredNews, economicEvents, earningsData,
+      stockTwitsSentiment, redditSentiment, prices } = pipeline;
 
-    const topTickers = scored.map(s => s.ticker);
+    const mid = Math.ceil(topTickers.length / 2);
+    const batch1Tickers = topTickers.slice(0, mid);
+    const batch2Tickers = topTickers.slice(mid);
 
-    console.log(`[scan/stream] mode=${scanMode} Pre-filtered ${Object.keys(candles).length} tickers → top ${scored.length}`);
+    const sliceForBatch = <T>(map: Record<string, T>, tickers: string[]) => {
+      const out: Record<string, T> = {};
+      for (const t of tickers) if (map[t]) out[t] = map[t];
+      return out;
+    };
 
-    // Fetch StockTwits sentiment and intraday candles for top tickers
-    const [stockTwitsSentiment, intradayCandles] = await Promise.all([
-      fetchStockTwitsSentiment(topTickers.slice(0, 15)),
-      fetchIntradayCandles(topTickers.slice(0, 20)),
-    ]);
-
-    const newsItems = news ?? MOCK_NEWS;
-    const intradayMap = intradayCandles ?? {};
-
-    // Split top stocks into two batches
-    const midpoint = Math.ceil(topTickers.length / 2);
-    const batch1Tickers = topTickers.slice(0, midpoint);
-    const batch2Tickers = topTickers.slice(midpoint);
-
-    const batch1Entries: [string, typeof candles[string]][] = batch1Tickers.map(t => [t, candles[t]]);
-    const batch2Entries: [string, typeof candles[string]][] = batch2Tickers.map(t => [t, candles[t]]);
-
-    // Build per-batch intraday slices so each batch only gets its own tickers
-    const batch1Intraday: Record<string, typeof intradayMap[string]> = {};
-    for (const t of batch1Tickers) {
-      if (intradayMap[t]) batch1Intraday[t] = intradayMap[t];
-    }
-    const batch2Intraday: Record<string, typeof intradayMap[string]> = {};
-    for (const t of batch2Tickers) {
-      if (intradayMap[t]) batch2Intraday[t] = intradayMap[t];
-    }
+    const batch1Entries: [string, typeof topCandles[string]][] = batch1Tickers.map(t => [t, topCandles[t]]);
+    const batch2Entries: [string, typeof topCandles[string]][] = batch2Tickers.map(t => [t, topCandles[t]]);
 
     // Fire batch 1
-    const batch1Results = await analyzeBatchWithClaude(
+    const batch1 = await analyzeBatchWithClaude(
       batch1Entries,
-      newsItems,
-      marketNews,
-      buyingPower,
-      focusDirections,
-      stockTwitsSentiment,
-      finnhubNewsData,
-      earningsData,
-      batch1Intraday
+      sliceForBatch(weeklyData, batch1Tickers),
+      sliceForBatch(intradayData, batch1Tickers),
+      sliceForBatch(premarketData, batch1Tickers),
+      sliceForBatch(vwapMap, batch1Tickers),
+      macroRegime, scoredNews, economicEvents, earningsData,
+      sliceForBatch(stockTwitsSentiment, batch1Tickers),
+      sliceForBatch(redditSentiment, batch1Tickers),
+      buyingPower, focusDirections
     );
-    sendEvent({ recommendations: batch1Results, done: false });
+    sendEvent({ recommendations: batch1, done: false });
 
     // Fire batch 2
-    const batch2Results = await analyzeBatchWithClaude(
+    const batch2 = await analyzeBatchWithClaude(
       batch2Entries,
-      newsItems,
-      marketNews,
-      buyingPower,
-      focusDirections,
-      stockTwitsSentiment,
-      finnhubNewsData,
-      earningsData,
-      batch2Intraday
+      sliceForBatch(weeklyData, batch2Tickers),
+      sliceForBatch(intradayData, batch2Tickers),
+      sliceForBatch(premarketData, batch2Tickers),
+      sliceForBatch(vwapMap, batch2Tickers),
+      macroRegime, scoredNews, economicEvents, earningsData,
+      sliceForBatch(stockTwitsSentiment, batch2Tickers),
+      sliceForBatch(redditSentiment, batch2Tickers),
+      buyingPower, focusDirections
     );
-    sendEvent({ recommendations: batch2Results, done: true, prices: prices ?? {} });
+    sendEvent({ recommendations: batch2, done: true, prices });
 
     res.end();
   } catch (err) {
@@ -212,7 +299,7 @@ app.get('/api/scan/stream', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// GET /api/news
+// ─── GET /api/news ────────────────────────────────────────────────────────────
 app.get('/api/news', requireAuth, async (_req, res) => {
   try {
     const news = await fetchNews();
@@ -224,39 +311,41 @@ app.get('/api/news', requireAuth, async (_req, res) => {
   }
 });
 
-// GET /api/positions
+// ─── GET /api/positions ───────────────────────────────────────────────────────
 app.get('/api/positions', requireAuth, async (req: AuthRequest, res) => {
   const userId = req.userId!;
-
   if (hasDatabase()) {
     const positions = await getPositions(userId);
     return res.json({ positions });
   }
-
   const positions = Array.from(memPositions.values())
-    .filter((p) => p.userId === userId)
+    .filter(p => p.userId === userId)
     .map(({ userId: _uid, ...p }) => p);
   return res.json({ positions });
 });
 
-// POST /api/positions
+// ─── POST /api/positions ──────────────────────────────────────────────────────
 app.post('/api/positions', requireAuth, async (req: AuthRequest, res) => {
   const userId = req.userId!;
-  const { ticker, entryPrice, direction } = req.body as {
+  const { ticker, entryPrice, direction, stopLoss, target } = req.body as {
     ticker?: string;
     entryPrice?: number;
     direction?: 'long' | 'short';
+    stopLoss?: number;
+    target?: number;
   };
 
   if (!ticker || entryPrice == null || !direction) {
     return res.status(400).json({ error: 'ticker, entryPrice, and direction are required' });
   }
 
-  const positionData = {
+  const positionData: Omit<Position, 'id'> = {
     ticker: ticker.toUpperCase(),
     entryPrice,
     entryTime: new Date().toISOString(),
     direction,
+    stopLoss: stopLoss ?? undefined,
+    target: target ?? undefined,
   };
 
   if (hasDatabase()) {
@@ -274,24 +363,22 @@ app.post('/api/positions', requireAuth, async (req: AuthRequest, res) => {
   return res.status(201).json({ position });
 });
 
-// DELETE /api/positions/:id
+// ─── DELETE /api/positions/:id ────────────────────────────────────────────────
 app.delete('/api/positions/:id', requireAuth, async (req: AuthRequest, res) => {
   const userId = req.userId!;
   const { id } = req.params;
-
   if (hasDatabase()) {
     const ok = await deletePosition(userId, id);
     if (!ok) return res.status(404).json({ error: 'Position not found' });
     return res.json({ success: true });
   }
-
   const pos = memPositions.get(id);
   if (!pos || pos.userId !== userId) return res.status(404).json({ error: 'Position not found' });
   memPositions.delete(id);
   return res.json({ success: true });
 });
 
-// GET /api/positions/:ticker/update
+// ─── GET /api/positions/:ticker/update ───────────────────────────────────────
 app.get('/api/positions/:ticker/update', requireAuth, async (req: AuthRequest, res) => {
   const userId = req.userId!;
   const ticker = req.params.ticker.toUpperCase();
@@ -300,9 +387,7 @@ app.get('/api/positions/:ticker/update', requireAuth, async (req: AuthRequest, r
   if (hasDatabase()) {
     position = await findPositionByTicker(userId, ticker);
   } else {
-    const mem = Array.from(memPositions.values()).find(
-      (p) => p.ticker === ticker && p.userId === userId
-    );
+    const mem = Array.from(memPositions.values()).find(p => p.ticker === ticker && p.userId === userId);
     position = mem ? (({ userId: _uid, ...p }) => p)(mem) : null;
   }
 
@@ -311,16 +396,10 @@ app.get('/api/positions/:ticker/update', requireAuth, async (req: AuthRequest, r
   }
 
   try {
-    const [candles, news] = await Promise.all([
-      fetchCandlesForTicker(ticker),
-      fetchNewsForTicker(ticker),
-    ]);
-
+    const [candles, news] = await Promise.all([fetchCandlesForTicker(ticker), fetchNewsForTicker(ticker)]);
     if (!candles) return res.json({ update: MOCK_POSITION_UPDATE, mock: true });
-
     const update = await analyzePositionWithClaude(position, candles, news ?? []);
     if (!update) return res.json({ update: MOCK_POSITION_UPDATE, mock: true });
-
     return res.json({ update, mock: false });
   } catch (err) {
     console.error('[position update] Error:', err);
@@ -328,69 +407,101 @@ app.get('/api/positions/:ticker/update', requireAuth, async (req: AuthRequest, r
   }
 });
 
-// Helper: load and decrypt user's brokerage credentials
+// ─── Notification routes ──────────────────────────────────────────────────────
+
+// GET /api/notifications/vapid-key — serve public VAPID key to frontend
+app.get('/api/notifications/vapid-key', (_req, res) => {
+  const key = process.env.VAPID_PUBLIC_KEY;
+  if (!key) return res.status(503).json({ error: 'Push notifications not configured' });
+  return res.json({ publicKey: key });
+});
+
+// POST /api/notifications/subscribe — store a push subscription
+app.post('/api/notifications/subscribe', requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.userId!;
+  const { endpoint, keys } = req.body as {
+    endpoint?: string;
+    keys?: { p256dh?: string; auth?: string };
+  };
+
+  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    return res.status(400).json({ error: 'endpoint, keys.p256dh, and keys.auth are required' });
+  }
+
+  if (!hasDatabase()) {
+    return res.status(503).json({ error: 'Push notifications require a database connection' });
+  }
+
+  try {
+    await savePushSubscription(userId, endpoint, keys.p256dh, keys.auth);
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('[notifications/subscribe] error:', err?.message);
+    return res.status(500).json({ error: 'Failed to save subscription' });
+  }
+});
+
+// DELETE /api/notifications/unsubscribe — remove a push subscription
+app.delete('/api/notifications/unsubscribe', requireAuth, async (req: AuthRequest, res) => {
+  const userId = req.userId!;
+  const { endpoint } = req.body as { endpoint?: string };
+  if (!endpoint) return res.status(400).json({ error: 'endpoint required' });
+
+  try {
+    await deletePushSubscription(userId, endpoint);
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to remove subscription' });
+  }
+});
+
+// ─── Brokerage routes ─────────────────────────────────────────────────────────
+
 async function getUserBrokerageKeys(userId: string): Promise<{ apiKey: string; secretKey: string } | null> {
   const account = await getBrokerageAccount(userId);
   if (!account) return null;
   try {
     return { apiKey: decrypt(account.encrypted_api_key), secretKey: decrypt(account.encrypted_secret_key) };
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-// POST /api/brokerage/connect
 app.post('/api/brokerage/connect', requireAuth, async (req: AuthRequest, res) => {
   const userId = req.userId!;
   const { apiKey, secretKey, accountType = 'paper' } = req.body as { apiKey?: string; secretKey?: string; accountType?: string };
   if (!apiKey || !secretKey) return res.status(400).json({ error: 'apiKey and secretKey required' });
-
   if (!hasDatabase()) return res.status(503).json({ error: 'Brokerage linking requires a database connection' });
-
-  // Verify credentials work before saving
-  try {
-    await fetchAccount(apiKey, secretKey);
-  } catch {
+  try { await fetchAccount(apiKey, secretKey); } catch {
     return res.status(400).json({ error: 'Invalid Alpaca credentials — could not connect to account' });
   }
-
   try {
     await saveBrokerageAccount(userId, encrypt(apiKey), encrypt(secretKey), accountType);
     return res.json({ success: true, accountType });
   } catch (err: any) {
-    console.error('[brokerage/connect] save error:', err?.message ?? err);
     return res.status(500).json({ error: 'Failed to save brokerage account', detail: err?.message });
   }
 });
 
-// GET /api/brokerage/status
 app.get('/api/brokerage/status', requireAuth, async (req: AuthRequest, res) => {
-  const userId = req.userId!;
   if (!hasDatabase()) return res.json({ connected: false });
-  const account = await getBrokerageAccount(userId);
+  const account = await getBrokerageAccount(req.userId!);
   if (!account) return res.json({ connected: false });
   return res.json({ connected: true, accountType: account.account_type });
 });
 
-// DELETE /api/brokerage/disconnect
 app.delete('/api/brokerage/disconnect', requireAuth, async (req: AuthRequest, res) => {
   await deleteBrokerageAccount(req.userId!);
   return res.json({ success: true });
 });
 
-// GET /api/brokerage/account
 app.get('/api/brokerage/account', requireAuth, async (req: AuthRequest, res) => {
   const keys = await getUserBrokerageKeys(req.userId!);
   if (!keys) return res.status(404).json({ error: 'No brokerage account connected' });
   try {
     const account = await fetchAccount(keys.apiKey, keys.secretKey);
     return res.json({ account });
-  } catch {
-    return res.status(502).json({ error: 'Failed to reach Alpaca' });
-  }
+  } catch { return res.status(502).json({ error: 'Failed to reach Alpaca' }); }
 });
 
-// GET /api/brokerage/positions
 app.get('/api/brokerage/positions', requireAuth, async (req: AuthRequest, res) => {
   const keys = await getUserBrokerageKeys(req.userId!);
   if (!keys) return res.status(404).json({ error: 'No brokerage account connected' });
@@ -400,22 +511,15 @@ app.get('/api/brokerage/positions', requireAuth, async (req: AuthRequest, res) =
       fetchOrders(keys.apiKey, keys.secretKey),
     ]);
     return res.json({ positions, orders });
-  } catch {
-    return res.status(502).json({ error: 'Failed to reach Alpaca' });
-  }
+  } catch { return res.status(502).json({ error: 'Failed to reach Alpaca' }); }
 });
 
-// POST /api/brokerage/order
 app.post('/api/brokerage/order', requireAuth, async (req: AuthRequest, res) => {
   const keys = await getUserBrokerageKeys(req.userId!);
   if (!keys) return res.status(404).json({ error: 'No brokerage account connected' });
   const { symbol, qty, side, type = 'market', time_in_force = 'day', limit_price } = req.body as {
-    symbol?: string;
-    qty?: number;
-    side?: 'buy' | 'sell';
-    type?: 'market' | 'limit';
-    time_in_force?: 'day' | 'gtc';
-    limit_price?: number;
+    symbol?: string; qty?: number; side?: 'buy' | 'sell';
+    type?: 'market' | 'limit'; time_in_force?: 'day' | 'gtc'; limit_price?: number;
   };
   if (!symbol || !qty || !side) return res.status(400).json({ error: 'symbol, qty, and side are required' });
   try {
@@ -426,18 +530,97 @@ app.post('/api/brokerage/order', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// DELETE /api/brokerage/order/:orderId
 app.delete('/api/brokerage/order/:orderId', requireAuth, async (req: AuthRequest, res) => {
   const keys = await getUserBrokerageKeys(req.userId!);
   if (!keys) return res.status(404).json({ error: 'No brokerage account connected' });
   try {
     await cancelOrder(keys.apiKey, keys.secretKey, req.params.orderId);
     return res.json({ success: true });
-  } catch {
-    return res.status(400).json({ error: 'Failed to cancel order' });
-  }
+  } catch { return res.status(400).json({ error: 'Failed to cancel order' }); }
 });
 
+// ─── Price Monitor: stop/target push alerts ───────────────────────────────────
+// Runs every 2 minutes during US market hours (9:30am–4:00pm ET Mon–Fri).
+// Checks all tracked positions with stop_loss or target set.
+// Fires a push notification the first time a threshold is crossed.
+
+function isMarketHours(): boolean {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  if (day === 0 || day === 6) return false;
+
+  // US Eastern: UTC-5 (EST) or UTC-4 (EDT)
+  // Approximate: market open 13:30 UTC, close 20:00 UTC
+  const hour = now.getUTCHours();
+  const minute = now.getUTCMinutes();
+  const totalMinutes = hour * 60 + minute;
+  return totalMinutes >= 810 && totalMinutes < 1200; // 13:30–20:00 UTC
+}
+
+async function runPriceAlertCheck(): Promise<void> {
+  if (!hasDatabase() || !hasVapidKeys()) return;
+  if (!isMarketHours()) return;
+
+  try {
+    const positions = await getAllPositionsWithAlerts();
+    if (positions.length === 0) return;
+
+    // Fetch current prices for all relevant tickers
+    const tickers = [...new Set(positions.map(p => p.ticker))];
+    const prices = await fetchLatestPrices();
+    if (!prices) return;
+
+    for (const pos of positions) {
+      const price = prices[pos.ticker];
+      if (price == null) continue;
+
+      const subs = await getPushSubscriptionsForUser((pos as any).userId);
+      if (subs.length === 0) continue;
+
+      // Stop loss alert
+      if (pos.stopLoss != null && !pos.notifiedStop) {
+        const hitStop = pos.direction === 'long'
+          ? price <= pos.stopLoss
+          : price >= pos.stopLoss;
+
+        if (hitStop) {
+          console.log(`[alerts] ${pos.ticker} hit stop loss $${pos.stopLoss} (current: $${price})`);
+          await sendToUser(subs, {
+            title: `SwingAI: ${pos.ticker} hit stop loss`,
+            body: `${pos.ticker} is at $${price.toFixed(2)} — stop loss of $${pos.stopLoss.toFixed(2)} triggered. Consider closing your ${pos.direction} position.`,
+            tag: `stop-${pos.id}`,
+          }, deleteExpiredPushSubscription);
+          await markPositionNotified(pos.id, 'notified_stop');
+        }
+      }
+
+      // Target alert
+      if (pos.target != null && !pos.notifiedTarget) {
+        const hitTarget = pos.direction === 'long'
+          ? price >= pos.target
+          : price <= pos.target;
+
+        if (hitTarget) {
+          console.log(`[alerts] ${pos.ticker} hit target $${pos.target} (current: $${price})`);
+          await sendToUser(subs, {
+            title: `SwingAI: ${pos.ticker} hit target`,
+            body: `${pos.ticker} reached $${price.toFixed(2)} — target of $${pos.target.toFixed(2)} achieved! Consider taking profit on your ${pos.direction} position.`,
+            tag: `target-${pos.id}`,
+          }, deleteExpiredPushSubscription);
+          await markPositionNotified(pos.id, 'notified_target');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[alerts] Price monitor error:', err);
+  }
+}
+
+// Start price alert monitor (every 2 minutes)
+const ALERT_INTERVAL_MS = 2 * 60 * 1000;
+setInterval(runPriceAlertCheck, ALERT_INTERVAL_MS);
+
+// ─── Start server ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Alpaca keys: ${process.env.ALPACA_API_KEY ? 'SET' : 'NOT SET'}`);
@@ -445,5 +628,5 @@ app.listen(PORT, () => {
   console.log(`Finnhub key: ${process.env.FINNHUB_API_KEY ? 'SET' : 'NOT SET'}`);
   console.log(`Supabase: ${hasDatabase() ? 'SET' : 'NOT SET (using in-memory fallback)'}`);
   console.log(`Encryption key: ${process.env.ENCRYPTION_KEY ? 'SET' : 'NOT SET'}`);
-  console.log(`Paper trading endpoint: ${process.env.ALPACA_PAPER_ENDPOINT || 'https://paper-api.alpaca.markets'}`);
+  console.log(`VAPID keys: ${hasVapidKeys() ? 'SET (push notifications active)' : 'NOT SET (push disabled)'}`);
 });

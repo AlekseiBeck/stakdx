@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Position, PositionUpdate } from '../types';
-import { getPositionUpdate, deletePosition } from '../api';
+import { getPositionUpdate, deletePosition, getVapidPublicKey, subscribeToNotifications, unsubscribeFromNotifications } from '../api';
 
 interface Props {
   positions: Position[];
@@ -24,25 +24,117 @@ interface UpdateState {
   mock: boolean;
 }
 
+// ─── iOS detection ─────────────────────────────────────────────────────────────
+function isIOS(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
+function isInStandaloneMode(): boolean {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true;
+}
+
+// Convert VAPID public key (base64url) to Uint8Array for PushManager
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return new Uint8Array([...rawData].map(char => char.charCodeAt(0)));
+}
+
 export default function PositionsPanel({ positions, onPositionClosed, onAddClick }: Props) {
   const [updates, setUpdates] = useState<Record<string, UpdateState>>({});
+  const [notifStatus, setNotifStatus] = useState<'idle' | 'loading' | 'subscribed' | 'denied' | 'unsupported'>('idle');
+  const [showIOSBanner, setShowIOSBanner] = useState(false);
+  const [iosBannerDismissed, setIosBannerDismissed] = useState(false);
+  const [currentSubscription, setCurrentSubscription] = useState<PushSubscription | null>(null);
+
+  // On mount, detect current notification state and iOS install status
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setNotifStatus('unsupported');
+      return;
+    }
+
+    // iOS: show install banner if not in standalone mode
+    if (isIOS() && !isInStandaloneMode()) {
+      setShowIOSBanner(true);
+      setNotifStatus('unsupported'); // iOS needs PWA install first
+      return;
+    }
+
+    // Check if already subscribed
+    navigator.serviceWorker.ready.then(reg => {
+      reg.pushManager.getSubscription().then(sub => {
+        if (sub) {
+          setCurrentSubscription(sub);
+          setNotifStatus('subscribed');
+        }
+      });
+    });
+
+    if (Notification.permission === 'denied') {
+      setNotifStatus('denied');
+    }
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    setNotifStatus('loading');
+
+    try {
+      // Request notification permission
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setNotifStatus('denied');
+        return;
+      }
+
+      // Get VAPID public key from backend
+      const vapidKey = await getVapidPublicKey();
+      if (!vapidKey) {
+        console.error('No VAPID public key from server');
+        setNotifStatus('idle');
+        return;
+      }
+
+      // Subscribe via PushManager
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as unknown as ArrayBuffer,
+      });
+
+      // Send subscription to backend
+      await subscribeToNotifications(subscription.toJSON());
+      setCurrentSubscription(subscription);
+      setNotifStatus('subscribed');
+    } catch (err) {
+      console.error('Notification subscription failed:', err);
+      setNotifStatus('idle');
+    }
+  };
+
+  const handleDisableNotifications = async () => {
+    if (!currentSubscription) return;
+    try {
+      await unsubscribeFromNotifications(currentSubscription.endpoint);
+      await currentSubscription.unsubscribe();
+      setCurrentSubscription(null);
+      setNotifStatus('idle');
+    } catch (err) {
+      console.error('Unsubscribe failed:', err);
+    }
+  };
 
   const handleGetUpdate = async (ticker: string) => {
-    setUpdates((prev) => ({
-      ...prev,
-      [ticker]: { loading: true, data: null, mock: false },
-    }));
+    setUpdates(prev => ({ ...prev, [ticker]: { loading: true, data: null, mock: false } }));
     try {
       const result = await getPositionUpdate(ticker);
-      setUpdates((prev) => ({
-        ...prev,
-        [ticker]: { loading: false, data: result.update, mock: result.mock },
-      }));
-    } catch (err) {
-      setUpdates((prev) => ({
-        ...prev,
-        [ticker]: { loading: false, data: null, mock: false },
-      }));
+      setUpdates(prev => ({ ...prev, [ticker]: { loading: false, data: result.update, mock: result.mock } }));
+    } catch {
+      setUpdates(prev => ({ ...prev, [ticker]: { loading: false, data: null, mock: false } }));
     }
   };
 
@@ -71,13 +163,91 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
             <span className="bg-blue-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{positions.length}</span>
           )}
         </div>
-        <button onClick={onAddClick} className="btn-ghost text-xs py-1.5 px-3">
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Add Position
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Notification toggle */}
+          {notifStatus === 'subscribed' ? (
+            <button
+              onClick={handleDisableNotifications}
+              className="flex items-center gap-1.5 text-xs py-1.5 px-2.5 rounded-lg bg-emerald-900/30 border border-emerald-700/40 text-emerald-400 hover:bg-red-900/20 hover:border-red-700/40 hover:text-red-400 transition-all"
+              title="Disable stop/target notifications"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Alerts On
+            </button>
+          ) : notifStatus === 'loading' ? (
+            <button disabled className="btn-ghost text-xs py-1.5 px-3 opacity-60">
+              <svg className="w-3 h-3 spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Enabling...
+            </button>
+          ) : notifStatus === 'denied' ? (
+            <span className="text-xs text-red-400/70 px-2">Notifications blocked</span>
+          ) : notifStatus === 'unsupported' && !showIOSBanner ? (
+            <span className="text-xs text-gray-600 px-2">Alerts unavailable</span>
+          ) : notifStatus !== 'unsupported' ? (
+            <button
+              onClick={handleEnableNotifications}
+              className="btn-ghost text-xs py-1.5 px-3"
+              title="Get push notifications when your positions hit stop loss or target"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+              </svg>
+              Enable Alerts
+            </button>
+          ) : null}
+
+          <button onClick={onAddClick} className="btn-ghost text-xs py-1.5 px-3">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add Position
+          </button>
+        </div>
       </div>
+
+      {/* iOS "Add to Home Screen" install banner */}
+      {showIOSBanner && !iosBannerDismissed && (
+        <div className="mx-4 mt-4 p-3.5 rounded-xl bg-blue-950/60 border border-blue-700/40">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <div className="mt-0.5 flex-shrink-0">
+                <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-blue-300">Enable Stop/Target Alerts on iPhone</p>
+                <p className="text-xs text-blue-400/80 mt-0.5 leading-relaxed">
+                  To receive push notifications, install SwingAI on your Home Screen:
+                </p>
+                <ol className="text-xs text-blue-400/70 mt-1.5 space-y-0.5 leading-relaxed">
+                  <li>1. Tap the <strong className="text-blue-300">Share</strong> button in Safari (
+                    <svg className="inline w-3.5 h-3.5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15" />
+                    </svg>
+                  )</li>
+                  <li>2. Scroll down and tap <strong className="text-blue-300">"Add to Home Screen"</strong></li>
+                  <li>3. Open SwingAI from your Home Screen and enable alerts here</li>
+                </ol>
+                <p className="text-[10px] text-blue-500/60 mt-1.5">Requires iOS 16.4 or later · Safari only</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIosBannerDismissed(true)}
+              className="flex-shrink-0 text-blue-500/60 hover:text-blue-400 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {positions.length === 0 ? (
         <div className="p-8 text-center">
@@ -118,8 +288,20 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-3 mt-1 flex-wrap">
                         <span className="text-xs text-gray-500">Entry: <span className="mono text-gray-300">${pos.entryPrice.toFixed(2)}</span></span>
+                        {pos.stopLoss != null && (
+                          <>
+                            <span className="text-xs text-gray-600">•</span>
+                            <span className="text-xs text-gray-500">Stop: <span className="mono text-red-400">${pos.stopLoss.toFixed(2)}</span></span>
+                          </>
+                        )}
+                        {pos.target != null && (
+                          <>
+                            <span className="text-xs text-gray-600">•</span>
+                            <span className="text-xs text-gray-500">Target: <span className="mono text-emerald-400">${pos.target.toFixed(2)}</span></span>
+                          </>
+                        )}
                         <span className="text-xs text-gray-600">•</span>
                         <span className="text-xs text-gray-500">Held: <span className="text-gray-300">{formatTimeHeld(pos.entryTime)}</span></span>
                         {update?.data && (

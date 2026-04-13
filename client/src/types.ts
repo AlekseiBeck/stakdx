@@ -34,6 +34,10 @@ export interface Position {
   entryPrice: number;
   entryTime: string;
   direction: 'long' | 'short';
+  stopLoss?: number;
+  target?: number;
+  notifiedStop?: boolean;
+  notifiedTarget?: boolean;
 }
 
 export interface PositionUpdate {

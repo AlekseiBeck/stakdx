@@ -115,9 +115,11 @@ export async function fetchPositions(): Promise<Position[]> {
 export async function addPosition(
   ticker: string,
   entryPrice: number,
-  direction: 'long' | 'short'
+  direction: 'long' | 'short',
+  stopLoss?: number,
+  target?: number
 ): Promise<Position> {
-  const data = await post('/positions', { ticker, entryPrice, direction });
+  const data = await post('/positions', { ticker, entryPrice, direction, stopLoss, target });
   return data.position;
 }
 
@@ -187,4 +189,40 @@ export async function cancelBrokerageOrder(orderId: string): Promise<void> {
   const headers = await authHeaders();
   const res = await fetch(`${BASE}/brokerage/order/${orderId}`, { method: 'DELETE', headers });
   if (!res.ok) throw new Error('Failed to cancel order');
+}
+
+// ─── Push Notifications ───────────────────────────────────────────────────────
+
+export async function getVapidPublicKey(): Promise<string | null> {
+  try {
+    const data = await get('/notifications/vapid-key');
+    return data.publicKey ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function subscribeToNotifications(
+  subscription: PushSubscriptionJSON
+): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${BASE}/notifications/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({
+      endpoint: subscription.endpoint,
+      keys: subscription.keys,
+    }),
+  });
+  if (!res.ok) throw new Error('Failed to subscribe to notifications');
+}
+
+export async function unsubscribeFromNotifications(endpoint: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${BASE}/notifications/unsubscribe`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ endpoint }),
+  });
+  if (!res.ok) throw new Error('Failed to unsubscribe');
 }

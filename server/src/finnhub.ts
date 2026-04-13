@@ -64,6 +64,53 @@ export async function fetchFinnhubNews(tickers: string[]): Promise<FinnhubNewsIt
   return results.sort((a, b) => b.datetime - a.datetime);
 }
 
+export interface EconomicEvent {
+  event: string;
+  date: string;
+  impact: 'high' | 'medium';
+  country: string;
+}
+
+// Fetch US high/medium impact economic events for the next 7 days.
+// Covers CPI, FOMC, NFP, PPI, retail sales, GDP etc.
+export async function fetchEconomicCalendar(): Promise<EconomicEvent[]> {
+  if (!hasFinnhubKey()) return [];
+
+  const today = new Date();
+  const sevenDaysOut = new Date(today);
+  sevenDaysOut.setDate(today.getDate() + 7);
+
+  try {
+    const res = await axios.get('https://finnhub.io/api/v1/calendar/economic', {
+      headers: getHeaders(),
+      params: {
+        from: today.toISOString().split('T')[0],
+        to: sevenDaysOut.toISOString().split('T')[0],
+      },
+      timeout: 5000,
+    });
+
+    const events = (res.data?.economicCalendar ?? []) as Array<{
+      event: string;
+      time: string;
+      impact: string;
+      country: string;
+    }>;
+
+    return events
+      .filter(e => e.country === 'US' && (e.impact === 'high' || e.impact === 'medium'))
+      .slice(0, 12)
+      .map(e => ({
+        event: e.event,
+        date: e.time?.split('T')[0] ?? today.toISOString().split('T')[0],
+        impact: e.impact === 'high' ? 'high' : 'medium',
+        country: e.country,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchUpcomingEarnings(tickers: string[]): Promise<EarningsEvent[]> {
   if (!hasFinnhubKey()) return [];
 
