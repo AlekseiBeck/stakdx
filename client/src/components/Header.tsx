@@ -54,10 +54,10 @@ export default function Header({
   }, []);
 
   const sessionConfig = {
-    open: { label: 'OPEN', color: 'text-emerald-400', dotColor: 'bg-emerald-400', border: 'border-emerald-800/60 bg-emerald-950/40' },
-    pre: { label: 'PRE', color: 'text-amber-400', dotColor: 'bg-amber-400', border: 'border-amber-800/60 bg-amber-950/40' },
-    after: { label: 'AH', color: 'text-blue-400', dotColor: 'bg-blue-400', border: 'border-blue-800/60 bg-blue-950/40' },
-    closed: { label: 'CLOSED', color: 'text-gray-500', dotColor: 'bg-gray-600', border: 'border-gray-800/60 bg-gray-950/40' },
+    open:   { label: 'OPEN',   color: 'text-emerald-400', dotColor: 'bg-emerald-400', border: 'border-emerald-800/60 bg-emerald-950/40' },
+    pre:    { label: 'PRE',    color: 'text-amber-400',   dotColor: 'bg-amber-400',   border: 'border-amber-800/60 bg-amber-950/40'   },
+    after:  { label: 'AH',     color: 'text-blue-400',    dotColor: 'bg-blue-400',    border: 'border-blue-800/60 bg-blue-950/40'     },
+    closed: { label: 'CLOSED', color: 'text-gray-500',    dotColor: 'bg-gray-600',    border: 'border-gray-800/60 bg-gray-950/40'     },
   };
 
   const cfg = sessionConfig[session];
@@ -66,31 +66,40 @@ export default function Header({
     timeZone: 'America/New_York',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
   });
 
+  const scanIcon = (size = 'w-4 h-4') => (
+    <svg className={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
+    </svg>
+  );
+
+  const spinIcon = (size = 'w-4 h-4') => (
+    <svg className={`${size} spin-slow`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  );
+
   return (
-    <header className="border-b border-[#16213a] bg-[#070b14]/90 backdrop-blur-md sticky top-0 z-50">
-      <div className="max-w-[1600px] mx-auto px-4 lg:px-6 py-3 flex items-center gap-3 lg:gap-4">
+    <header className="border-b border-[#16213a] bg-[#070b14]/95 backdrop-blur-md sticky top-0 z-50 safe-top">
+
+      {/* ── Desktop: single row (≥ 1024px) ─────────────────────────────── */}
+      <div className="hidden lg:flex max-w-[1600px] mx-auto px-6 py-3 items-center gap-4">
         {/* Logo */}
         <div className="flex items-center gap-2.5 flex-shrink-0">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
-            <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
             </svg>
           </div>
           <div>
             <h1 className="text-base font-bold text-white tracking-tight leading-none">SwingAI</h1>
-            <p className="text-[10px] text-gray-600 leading-none mt-0.5 hidden sm:block">AI Trading Terminal</p>
+            <p className="text-[10px] text-gray-600 leading-none mt-0.5">AI Trading Terminal</p>
           </div>
         </div>
 
-        {/* Mode Switcher — primary control, always visible */}
-        <div className="flex-shrink-0">
-          <ModeSwitcher mode={mode} onChange={onModeChange} />
-        </div>
+        <div className="flex-shrink-0"><ModeSwitcher mode={mode} onChange={onModeChange} /></div>
 
-        {/* Buying Power — hidden on small mobile */}
         <div className="hidden sm:flex items-center flex-shrink-0">
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 mono text-xs">$</span>
@@ -104,33 +113,12 @@ export default function Header({
           </div>
         </div>
 
-        {/* Scan Button */}
-        <button
-          onClick={onScan}
-          disabled={isScanning}
-          className="btn-primary text-sm flex-shrink-0 py-2"
-        >
-          {isScanning ? (
-            <>
-              <svg className="w-3.5 h-3.5 spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span className="hidden sm:inline">Scanning...</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
-              </svg>
-              <span className="hidden sm:inline">Run Scan</span>
-            </>
-          )}
+        <button onClick={onScan} disabled={isScanning} className="btn-primary text-sm flex-shrink-0 py-2">
+          {isScanning ? <>{spinIcon('w-3.5 h-3.5')} Scanning...</> : <>{scanIcon('w-3.5 h-3.5')} Run Scan</>}
         </button>
 
-        {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Market status + clock */}
         <div className="hidden md:flex items-center gap-3">
           <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold mono ${cfg.border} ${cfg.color}`}>
             <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dotColor}`} />
@@ -142,7 +130,6 @@ export default function Header({
           </div>
         </div>
 
-        {/* Last scan */}
         {lastScanTime && (
           <div className="hidden lg:block text-right border-l border-[#16213a] pl-3">
             <div className="text-[10px] text-gray-600">Last scan</div>
@@ -152,51 +139,113 @@ export default function Header({
           </div>
         )}
 
-        {/* Mock data badge */}
         {isMockData && (
           <span className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-md bg-amber-950/50 border border-amber-800/40 text-amber-400 text-xs font-medium flex-shrink-0">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-            </svg>
             Demo
           </span>
         )}
 
-        {/* Brokerage status */}
         {brokerageConnected ? (
-          <button
-            onClick={onOpenPaperPanel}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-800/50 bg-emerald-950/30 text-emerald-400 text-xs font-semibold hover:border-emerald-700 hover:bg-emerald-950/50 transition-all flex-shrink-0"
-            title="View paper account"
-          >
+          <button onClick={onOpenPaperPanel} className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-800/50 bg-emerald-950/30 text-emerald-400 text-xs font-semibold hover:border-emerald-700 transition-all flex-shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
             Paper
           </button>
         ) : (
-          <button
-            onClick={onOpenConnectModal}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#1e3a5f] text-cyan-500 text-xs font-semibold hover:border-cyan-700/60 hover:text-cyan-400 transition-all flex-shrink-0"
-            title="Connect brokerage account"
-          >
+          <button onClick={onOpenConnectModal} className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#1e3a5f] text-cyan-500 text-xs font-semibold hover:border-cyan-700/60 hover:text-cyan-400 transition-all flex-shrink-0">
             Connect Broker
           </button>
         )}
 
-        {/* User menu */}
         <div className="flex items-center gap-2 pl-2 border-l border-[#16213a]">
           <div className="hidden lg:block text-right">
             <div className="text-xs text-gray-500 truncate max-w-[120px]">{userEmail}</div>
           </div>
-          <button
-            onClick={onSignOut}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-950/30 transition-all"
-            title="Sign out"
-          >
+          <button onClick={onSignOut} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-950/30 transition-all" title="Sign out">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
             </svg>
           </button>
         </div>
+      </div>
+
+      {/* ── Mobile: two rows (< 1024px) ─────────────────────────────────── */}
+      <div className="lg:hidden">
+
+        {/* Row 1 — brand · market status · sign out */}
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
+          {/* Logo */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-white leading-none tracking-tight">SwingAI</h1>
+              <p className="text-[10px] text-gray-500 leading-none mt-0.5">AI Trading Terminal</p>
+            </div>
+          </div>
+
+          {/* Right: market status + time + sign out */}
+          <div className="flex items-center gap-2">
+            {/* Market badge + time stacked */}
+            <div className="flex flex-col items-end gap-0.5">
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-bold mono ${cfg.border} ${cfg.color}`}>
+                <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dotColor}`} />
+                {cfg.label}
+              </div>
+              <span className="text-[10px] text-gray-500 mono">{etTime} ET</span>
+            </div>
+
+            {/* Sign out — labelled, tappable */}
+            <button
+              onClick={onSignOut}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#161f36] border border-[#1e2d4d] text-gray-400 hover:text-red-400 hover:bg-red-950/20 active:scale-95 transition-all text-xs font-semibold min-w-[44px] min-h-[44px] justify-center"
+              title="Sign out"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+              </svg>
+              <span>Out</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2 — mode switcher + scan button */}
+        <div className="flex items-center gap-3 px-4 pb-3">
+          <div className="flex-1 min-w-0">
+            <ModeSwitcher mode={mode} onChange={onModeChange} />
+          </div>
+
+          <button
+            onClick={onScan}
+            disabled={isScanning}
+            className="btn-primary text-sm flex-shrink-0 py-2.5 px-4 min-h-[44px]"
+          >
+            {isScanning
+              ? <>{spinIcon('w-4 h-4')} Scanning…</>
+              : <>{scanIcon('w-4 h-4')} Run Scan</>
+            }
+          </button>
+        </div>
+
+        {/* Row 3 — brokerage status (only if connected, keeps it from cluttering) */}
+        {brokerageConnected && (
+          <div className="px-4 pb-2.5 flex items-center gap-2">
+            <button onClick={onOpenPaperPanel} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-800/50 bg-emerald-950/30 text-emerald-400 text-xs font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
+              Paper Account
+            </button>
+            {isMockData && (
+              <span className="px-2 py-1 rounded-md bg-amber-950/50 border border-amber-800/40 text-amber-400 text-xs font-medium">Demo</span>
+            )}
+          </div>
+        )}
+        {!brokerageConnected && isMockData && (
+          <div className="px-4 pb-2.5">
+            <span className="px-2 py-1 rounded-md bg-amber-950/50 border border-amber-800/40 text-amber-400 text-xs font-medium">Demo data</span>
+          </div>
+        )}
       </div>
     </header>
   );
