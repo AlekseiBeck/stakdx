@@ -364,8 +364,8 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
       />
 
       {showPaperPanel && (
-        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-4 sm:pb-0 pt-20 sm:pt-0" onClick={() => setShowPaperPanel(false)}>
-          <div className="w-full max-w-xl max-h-[80vh] sm:max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-20 sm:pb-0 pt-20 sm:pt-0" onClick={() => setShowPaperPanel(false)}>
+          <div className="w-full max-w-xl max-h-[75vh] sm:max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <PaperTradingPanel
               visible={showPaperPanel}
               onClose={() => setShowPaperPanel(false)}
