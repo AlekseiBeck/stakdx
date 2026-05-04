@@ -289,11 +289,10 @@ function buildIntradaySection(intradayData: Record<string, Candle[]>): string {
 
 function buildScanPrompt(buyingPower: number | null): string {
   const hasBP = buyingPower && buyingPower > 0;
-  const maxRisk = hasBP ? (buyingPower! * 0.02).toFixed(2) : null;
 
   const bpSection = hasBP
-    ? `\nBUYING POWER & SIZING:\n- Available: $${buyingPower!.toLocaleString()} | Max risk/trade: 2% = $${maxRisk}\n- shares = $${maxRisk} / (entry − stop) | contracts = $${maxRisk} / (premium × 100)\n- Return exact share/contract counts, maxRisk and potentialGain in dollars.\n`
-    : `\nSIZING: No buying power given. Use "size to 2% account risk" as positionSize.\n`;
+    ? `\nBUYING POWER & SIZING:\n- Available capital to deploy per trade: $${buyingPower!.toLocaleString()}\n- shares = floor($${buyingPower!.toLocaleString()} / entryPrice) — size the position to use the full buying power\n- maxRisk = shares × (entryPrice − stopLoss) — report actual dollar risk\n- potentialGain = shares × (target − entryPrice)\n- Return exact share counts in positionSize (e.g. "59 shares"), maxRisk and potentialGain in dollars.\n`
+    : `\nSIZING: No buying power given. Use "size to risk $200" as positionSize.\n`;
 
   return `You are a senior professional swing trader with 20 years of experience at a top-tier hedge fund. You combine rigorous technical analysis, macro awareness, news catalysts, and social sentiment to surface the highest-conviction setups available right now.
 ${bpSection}

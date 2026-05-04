@@ -11,9 +11,11 @@ interface Props {
   session?: unknown;
 }
 
-function parseQty(positionSize: string): number {
+function parseQty(positionSize: string, fallbackPrice?: number, buyingPower?: number): number {
   const match = positionSize.match(/\d+/);
-  return match ? parseInt(match[0], 10) : 1;
+  if (match) return parseInt(match[0], 10);
+  if (fallbackPrice && buyingPower) return Math.floor(buyingPower / fallbackPrice);
+  return 1;
 }
 
 export default function ExecuteTradeModal({ isOpen, onClose, recommendation, currentPrice, onSuccess, session: _session }: Props) {
