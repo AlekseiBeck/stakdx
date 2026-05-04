@@ -256,7 +256,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
 
       {/* Mobile layout (<1024px): tab navigation */}
       <div className="lg:hidden">
-        <main className="pb-20 px-4 pt-4">
+        <main className="pb-28 px-4 pt-4">
           {mobileTab === 'scan' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
