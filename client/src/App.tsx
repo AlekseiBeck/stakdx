@@ -57,6 +57,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [showPaperPanel, setShowPaperPanel] = useState(false);
   const [paperPositions, setPaperPositions] = useState<AlpacaPosition[]>([]);
+  const [desktopSideTab, setDesktopSideTab] = useState<'positions' | 'news'>('positions');
 
   const loadNews = useCallback(async () => {
     try {
@@ -241,15 +242,66 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
             />
           </div>
 
-          {/* Right: positions stacked above news */}
-          <div className="space-y-4 sticky top-20">
-            <PositionsPanel
-              positions={positions}
-              paperPositions={paperPositions}
-              onPositionClosed={handlePositionClosed}
-              onAddClick={() => handleOpenAddModal()}
-            />
-            <NewsPanel news={news} />
+          {/* Right: tabbed sidebar */}
+          <div className="sticky top-20 flex flex-col gap-0">
+            {/* Tab bar */}
+            <div className="flex items-center bg-[#0d1424] border border-[#16213a] rounded-t-xl overflow-hidden">
+              <button
+                onClick={() => setDesktopSideTab('positions')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold transition-colors ${
+                  desktopSideTab === 'positions'
+                    ? 'text-white bg-[#131d35] border-b-2 border-blue-500'
+                    : 'text-gray-500 hover:text-gray-300 border-b-2 border-transparent'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25" />
+                </svg>
+                Positions
+                {(positions.length + paperPositions.length) > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                    desktopSideTab === 'positions' ? 'bg-blue-600 text-white' : 'bg-[#1a2442] text-gray-400'
+                  }`}>
+                    {positions.length + paperPositions.length}
+                  </span>
+                )}
+              </button>
+              <div className="w-px h-6 bg-[#16213a]" />
+              <button
+                onClick={() => setDesktopSideTab('news')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold transition-colors ${
+                  desktopSideTab === 'news'
+                    ? 'text-white bg-[#131d35] border-b-2 border-blue-500'
+                    : 'text-gray-500 hover:text-gray-300 border-b-2 border-transparent'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25" />
+                </svg>
+                News
+                {news.length > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                    desktopSideTab === 'news' ? 'bg-blue-600 text-white' : 'bg-[#1a2442] text-gray-400'
+                  }`}>
+                    {news.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Panel content — rounded bottom only, flush with tab bar */}
+            <div className="[&>div]:rounded-t-none [&>div]:border-t-0">
+              {desktopSideTab === 'positions' ? (
+                <PositionsPanel
+                  positions={positions}
+                  paperPositions={paperPositions}
+                  onPositionClosed={handlePositionClosed}
+                  onAddClick={() => handleOpenAddModal()}
+                />
+              ) : (
+                <NewsPanel news={news} />
+              )}
+            </div>
           </div>
         </div>
       </main>
