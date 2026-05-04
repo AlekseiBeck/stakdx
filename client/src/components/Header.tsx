@@ -158,63 +158,53 @@ export default function Header({
       {/* Mobile: two rows (<1024px) */}
       <div className="lg:hidden">
 
-        {/* Row 1: market status + sign out */}
-        <div className="flex items-center justify-end px-4 pt-3 pb-2 gap-2">
-          <div className="flex flex-col items-end gap-0.5">
-            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-bold mono ${cfg.border} ${cfg.color}`}>
-              <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dotColor}`} />
-              {cfg.label}
-            </div>
-            <span className="text-[10px] text-gray-500 mono">{etTime} ET</span>
+        {/* Row 1: mode switcher + market status + sign out */}
+        <div className="flex items-center gap-2 px-3 pt-2 pb-2">
+          <div className="flex-1 min-w-0">
+            <ModeSwitcher mode={mode} onChange={onModeChange} />
+          </div>
+
+          <div className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[10px] font-bold mono flex-shrink-0 ${cfg.border} ${cfg.color}`}>
+            <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dotColor}`} />
+            {cfg.label}
+            <span className="text-gray-600 ml-1">{etTime}</span>
           </div>
 
           <button
             onClick={onSignOut}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#161f36] border border-[#1e2d4d] text-gray-400 hover:text-red-400 hover:bg-red-950/20 active:scale-95 transition-all text-xs font-semibold min-w-[44px] min-h-[44px] justify-center"
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#161f36] border border-[#1e2d4d] text-gray-400 hover:text-red-400 hover:bg-red-950/20 active:scale-95 transition-all flex-shrink-0"
             title="Sign out"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
             </svg>
-            <span>Out</span>
           </button>
         </div>
 
-        {/* Row 2: mode switcher + scan button */}
-        <div className="flex items-center gap-3 px-4 pb-3">
-          <div className="flex-1 min-w-0">
-            <ModeSwitcher mode={mode} onChange={onModeChange} />
-          </div>
-
+        {/* Row 2: scan button + optional brokerage/demo */}
+        <div className="flex items-center gap-2 px-3 pb-2">
           <button
             onClick={onScan}
             disabled={isScanning}
-            className="btn-primary text-sm flex-shrink-0 py-2.5 px-4 min-h-[44px]"
+            className="btn-primary text-sm flex-shrink-0 py-2 px-4 min-h-[40px]"
           >
             {isScanning
               ? <>{spinIcon('w-4 h-4')} Scanning…</>
               : <>{scanIcon('w-4 h-4')} Run Scan</>
             }
           </button>
-        </div>
 
-        {/* Row 3: brokerage status */}
-        {brokerageConnected && (
-          <div className="px-4 pb-2.5 flex items-center gap-2">
-            <button onClick={onOpenPaperPanel} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-800/50 bg-emerald-950/30 text-emerald-400 text-xs font-semibold">
+          {brokerageConnected && (
+            <button onClick={onOpenPaperPanel} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-800/50 bg-emerald-950/30 text-emerald-400 text-xs font-semibold min-h-[40px]">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
-              Paper Account
+              Paper
             </button>
-            {isMockData && (
-              <span className="px-2 py-1 rounded-md bg-amber-950/50 border border-amber-800/40 text-amber-400 text-xs font-medium">Demo</span>
-            )}
-          </div>
-        )}
-        {!brokerageConnected && isMockData && (
-          <div className="px-4 pb-2.5">
-            <span className="px-2 py-1 rounded-md bg-amber-950/50 border border-amber-800/40 text-amber-400 text-xs font-medium">Demo data</span>
-          </div>
-        )}
+          )}
+
+          {isMockData && (
+            <span className="px-2 py-1 rounded-md bg-amber-950/50 border border-amber-800/40 text-amber-400 text-xs font-medium">Demo</span>
+          )}
+        </div>
       </div>
     </header>
   );
