@@ -9,8 +9,8 @@ import PaperTradingPanel from './components/PaperTradingPanel';
 import AuthPage from './pages/AuthPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import { useAuth } from './AuthContext';
-import { TradeRecommendation, NewsItem, Position, ScanMode, BrokerageStatus } from './types';
-import { scanStream, runScan, fetchNews, addPosition, fetchPositions, getBrokerageStatus } from './api';
+import { TradeRecommendation, NewsItem, Position, ScanMode, BrokerageStatus, AlpacaPosition } from './types';
+import { scanStream, runScan, fetchNews, addPosition, fetchPositions, getBrokerageStatus, getBrokeragePositions } from './api';
 import { SP500_TICKERS } from './constants';
 
 type MobileTab = 'scan' | 'positions' | 'news';
@@ -56,6 +56,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const [brokerageStatus, setBrokerageStatus] = useState<BrokerageStatus>({ connected: false });
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [showPaperPanel, setShowPaperPanel] = useState(false);
+  const [paperPositions, setPaperPositions] = useState<AlpacaPosition[]>([]);
 
   const loadNews = useCallback(async () => {
     try {
@@ -78,9 +79,22 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     return () => clearInterval(interval);
   }, [loadNews, loadPositions]);
 
-  useEffect(() => {
-    getBrokerageStatus().then(setBrokerageStatus).catch(() => {});
+  const loadBrokerageData = useCallback(async () => {
+    try {
+      const status = await getBrokerageStatus();
+      setBrokerageStatus(status);
+      if (status.connected) {
+        const { positions } = await getBrokeragePositions();
+        setPaperPositions(positions);
+      }
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    loadBrokerageData();
+    const interval = setInterval(loadBrokerageData, 30 * 1000);
+    return () => clearInterval(interval);
+  }, [loadBrokerageData]);
 
   const handleScan = async () => {
     setIsScanning(true);
@@ -216,7 +230,14 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
               isStreaming={isStreaming}
               streamPhase={streamPhase}
               brokerageConnected={brokerageStatus.connected}
-              onTradeExecuted={() => { if (showPaperPanel) setShowPaperPanel(false); setTimeout(() => setShowPaperPanel(true), 50); }}
+              onTradeExecuted={(rec, price) => {
+              const stop = parseFloat(rec.stopLoss.replace(/[^0-9.]/g, '')) || undefined;
+              const target = parseFloat(rec.target.replace(/[^0-9.]/g, '')) || undefined;
+              const dir = rec.direction === 'LONG' || rec.direction === 'CALL' ? 'long' : 'short';
+              handleAddPosition(rec.ticker, price, dir, stop, target);
+              loadBrokerageData();
+              if (showPaperPanel) { setShowPaperPanel(false); setTimeout(() => setShowPaperPanel(true), 50); }
+            }}
             />
           </div>
 
@@ -224,6 +245,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
           <div className="space-y-4 sticky top-20">
             <PositionsPanel
               positions={positions}
+              paperPositions={paperPositions}
               onPositionClosed={handlePositionClosed}
               onAddClick={() => handleOpenAddModal()}
             />
@@ -263,7 +285,13 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
                 isStreaming={isStreaming}
                 streamPhase={streamPhase}
                 brokerageConnected={brokerageStatus.connected}
-                onTradeExecuted={() => { if (showPaperPanel) setShowPaperPanel(false); setTimeout(() => setShowPaperPanel(true), 50); }}
+                onTradeExecuted={(rec, price) => {
+                  const stop = parseFloat(rec.stopLoss.replace(/[^0-9.]/g, '')) || undefined;
+                  const target = parseFloat(rec.target.replace(/[^0-9.]/g, '')) || undefined;
+                  const dir = rec.direction === 'LONG' || rec.direction === 'CALL' ? 'long' : 'short';
+                  handleAddPosition(rec.ticker, price, dir, stop, target);
+                  loadBrokerageData();
+                }}
               />
             </div>
           )}
@@ -271,6 +299,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
           {mobileTab === 'positions' && (
             <PositionsPanel
               positions={positions}
+              paperPositions={paperPositions}
               onPositionClosed={handlePositionClosed}
               onAddClick={() => handleOpenAddModal()}
             />
@@ -300,7 +329,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
           ]).map(({ key, label, icon }) => (
             <button
               key={key}
-              onClick={() => setMobileTab(key)}
+              onClick={() => { setMobileTab(key); setShowPaperPanel(false); }}
               className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
                 mobileTab === key ? 'text-blue-400' : 'text-gray-600'
               }`}
@@ -330,7 +359,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
         onClose={() => setShowConnectModal(false)}
         onConnected={() => {
           setShowConnectModal(false);
-          getBrokerageStatus().then(setBrokerageStatus).catch(() => {});
+          loadBrokerageData();
         }}
       />
 

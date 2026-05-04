@@ -83,21 +83,8 @@ export default function Header({
   return (
     <header className="border-b border-[#16213a] bg-[#070b14]/95 backdrop-blur-md sticky top-0 z-50 safe-top">
 
-      {/* ── Desktop: single row (≥ 1024px) ─────────────────────────────── */}
+      {/* Desktop: single row (>=1024px) */}
       <div className="hidden lg:flex max-w-[1600px] mx-auto px-6 py-3 items-center gap-4">
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 flex-shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-white tracking-tight leading-none">SwingAI</h1>
-            <p className="text-[10px] text-gray-600 leading-none mt-0.5">AI Trading Terminal</p>
-          </div>
-        </div>
-
         <div className="flex-shrink-0"><ModeSwitcher mode={mode} onChange={onModeChange} /></div>
 
         <div className="hidden sm:flex items-center flex-shrink-0">
@@ -168,50 +155,32 @@ export default function Header({
         </div>
       </div>
 
-      {/* ── Mobile: two rows (< 1024px) ─────────────────────────────────── */}
+      {/* Mobile: two rows (<1024px) */}
       <div className="lg:hidden">
 
-        {/* Row 1 — brand · market status · sign out */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center flex-shrink-0">
-              <svg className="w-4.5 h-4.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
-              </svg>
+        {/* Row 1: market status + sign out */}
+        <div className="flex items-center justify-end px-4 pt-3 pb-2 gap-2">
+          <div className="flex flex-col items-end gap-0.5">
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-bold mono ${cfg.border} ${cfg.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dotColor}`} />
+              {cfg.label}
             </div>
-            <div>
-              <h1 className="text-base font-bold text-white leading-none tracking-tight">SwingAI</h1>
-              <p className="text-[10px] text-gray-500 leading-none mt-0.5">AI Trading Terminal</p>
-            </div>
+            <span className="text-[10px] text-gray-500 mono">{etTime} ET</span>
           </div>
 
-          {/* Right: market status + time + sign out */}
-          <div className="flex items-center gap-2">
-            {/* Market badge + time stacked */}
-            <div className="flex flex-col items-end gap-0.5">
-              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-bold mono ${cfg.border} ${cfg.color}`}>
-                <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dotColor}`} />
-                {cfg.label}
-              </div>
-              <span className="text-[10px] text-gray-500 mono">{etTime} ET</span>
-            </div>
-
-            {/* Sign out — labelled, tappable */}
-            <button
-              onClick={onSignOut}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#161f36] border border-[#1e2d4d] text-gray-400 hover:text-red-400 hover:bg-red-950/20 active:scale-95 transition-all text-xs font-semibold min-w-[44px] min-h-[44px] justify-center"
-              title="Sign out"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-              </svg>
-              <span>Out</span>
-            </button>
-          </div>
+          <button
+            onClick={onSignOut}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#161f36] border border-[#1e2d4d] text-gray-400 hover:text-red-400 hover:bg-red-950/20 active:scale-95 transition-all text-xs font-semibold min-w-[44px] min-h-[44px] justify-center"
+            title="Sign out"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+            </svg>
+            <span>Out</span>
+          </button>
         </div>
 
-        {/* Row 2 — mode switcher + scan button */}
+        {/* Row 2: mode switcher + scan button */}
         <div className="flex items-center gap-3 px-4 pb-3">
           <div className="flex-1 min-w-0">
             <ModeSwitcher mode={mode} onChange={onModeChange} />
@@ -229,7 +198,7 @@ export default function Header({
           </button>
         </div>
 
-        {/* Row 3 — brokerage status (only if connected, keeps it from cluttering) */}
+        {/* Row 3: brokerage status */}
         {brokerageConnected && (
           <div className="px-4 pb-2.5 flex items-center gap-2">
             <button onClick={onOpenPaperPanel} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-800/50 bg-emerald-950/30 text-emerald-400 text-xs font-semibold">

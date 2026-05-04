@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Position, PositionUpdate } from '../types';
+import { Position, PositionUpdate, AlpacaPosition } from '../types';
 import { getPositionUpdate, deletePosition, getVapidPublicKey, subscribeToNotifications, unsubscribeFromNotifications } from '../api';
 
 interface Props {
   positions: Position[];
   onPositionClosed: (id: string) => void;
   onAddClick: () => void;
+  paperPositions?: AlpacaPosition[];
 }
 
 function formatTimeHeld(entryTime: string): string {
@@ -42,7 +43,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return new Uint8Array([...rawData].map(char => char.charCodeAt(0)));
 }
 
-export default function PositionsPanel({ positions, onPositionClosed, onAddClick }: Props) {
+export default function PositionsPanel({ positions, onPositionClosed, onAddClick, paperPositions = [] }: Props) {
   const [updates, setUpdates] = useState<Record<string, UpdateState>>({});
   const [notifStatus, setNotifStatus] = useState<'idle' | 'loading' | 'subscribed' | 'denied' | 'unsupported'>('idle');
   const [showIOSBanner, setShowIOSBanner] = useState(false);
@@ -249,7 +250,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
         </div>
       )}
 
-      {positions.length === 0 ? (
+      {positions.length === 0 && paperPositions.length === 0 ? (
         <div className="p-8 text-center">
           <div className="w-12 h-12 rounded-full bg-[#1a2442] flex items-center justify-center mx-auto mb-3">
             <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -261,6 +262,58 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
         </div>
       ) : (
         <div className="divide-y divide-[#1a2442]/60">
+          {/* Paper account positions (live from Alpaca) */}
+          {paperPositions.length > 0 && (
+            <div className="px-5 py-3">
+              <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
+                Paper Account
+              </div>
+              <div className="space-y-1.5">
+                {paperPositions.map((pos) => {
+                  const isLong = pos.side === 'long';
+                  const pl = parseFloat(pos.unrealized_pl);
+                  const plPct = (parseFloat(pos.unrealized_plpc) * 100).toFixed(2);
+                  return (
+                    <div key={pos.symbol} className="bg-[#0a0e1a] rounded-lg px-3 py-2.5 border border-[#16213a]">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="mono font-bold text-white text-sm">{pos.symbol}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                            isLong ? 'bg-emerald-900/50 border-emerald-700/40 text-emerald-400' : 'bg-red-900/50 border-red-700/40 text-red-400'
+                          }`}>
+                            {isLong ? 'LONG' : 'SHORT'}
+                          </span>
+                          <span className="mono text-xs text-gray-500">{pos.qty} sh</span>
+                        </div>
+                        <span className={`mono text-sm font-bold ${pl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {pl >= 0 ? '+' : ''}${Math.abs(pl).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs mono text-gray-500">
+                        <span>Avg ${parseFloat(pos.avg_entry_price).toFixed(2)}</span>
+                        <span>Now ${parseFloat(pos.current_price).toFixed(2)}</span>
+                        <span className={pl >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                          {pl >= 0 ? '+' : ''}{plPct}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Manually tracked positions */}
+          {positions.length > 0 && (
+            <div>
+              {paperPositions.length > 0 && (
+                <div className="px-5 pt-3 pb-1">
+                  <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                    Tracked Positions
+                  </div>
+                </div>
+              )}
           {positions.map((pos) => {
             const update = updates[pos.ticker];
             const cfg = update?.data ? verdictConfig[update.data.verdict] : null;
@@ -369,6 +422,8 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
               </div>
             );
           })}
+            </div>
+          )}
         </div>
       )}
     </div>

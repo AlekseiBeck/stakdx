@@ -9,7 +9,7 @@ interface Props {
   isStreaming?: boolean;
   streamPhase?: 'idle' | 'batch1' | 'batch2' | 'done';
   brokerageConnected?: boolean;
-  onTradeExecuted?: () => void;
+  onTradeExecuted?: (rec: TradeRecommendation, price: number) => void;
 }
 
 function SkeletonCard() {

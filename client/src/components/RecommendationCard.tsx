@@ -10,7 +10,7 @@ interface Props {
   brokerageConnected?: boolean;
   currentPrice?: number;
   session?: unknown;
-  onTradeExecuted?: () => void;
+  onTradeExecuted?: (rec: TradeRecommendation, price: number) => void;
 }
 
 function DirectionBadge({ direction }: { direction: TradeRecommendation['direction'] }) {
@@ -242,7 +242,7 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
           session={session}
           onSuccess={() => {
             setShowTradeModal(false);
-            onTradeExecuted?.();
+            onTradeExecuted?.(rec, currentPrice ?? price ?? 0);
           }}
         />
       )}
