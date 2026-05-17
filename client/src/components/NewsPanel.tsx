@@ -30,7 +30,7 @@ export default function NewsPanel({ news }: Props) {
   }
 
   return (
-    <div className="card overflow-hidden">
+    <div className="card">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[#222225]">
         <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5" />
@@ -39,7 +39,7 @@ export default function NewsPanel({ news }: Props) {
         <span className="text-xs text-gray-600 ml-auto">{news.length} stories</span>
       </div>
 
-      <div className="divide-y divide-[#222225]/60 max-h-[400px] overflow-y-auto">
+      <div className="divide-y divide-[#222225]/60">
         {news.slice(0, 20).map((item) => (
           <a
             key={item.id}
