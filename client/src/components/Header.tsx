@@ -169,9 +169,11 @@ export default function Header({
             <img src="/stakd-logo.png" className="h-5 w-auto rounded-md" alt="" />
             <span className="text-sm font-bold tracking-tight text-white">Stakdx</span>
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-shrink-0">
             <ModeSwitcher mode={mode} onChange={onModeChange} />
           </div>
+
+          <div className="flex-1" />
 
           <div className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[10px] font-bold mono flex-shrink-0 ${cfg.border} ${cfg.color}`}>
             <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dotColor}`} />
