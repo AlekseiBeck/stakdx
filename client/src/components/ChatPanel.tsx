@@ -133,7 +133,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
             onKeyDown={handleKey}
             placeholder="Ask about setups, positions, or market conditions..."
             rows={1}
-            className="flex-1 bg-transparent text-white text-sm placeholder-gray-600 resize-none focus:outline-none leading-relaxed"
+            className="flex-1 bg-transparent text-white text-sm placeholder-gray-600 resize-none focus:outline-none leading-relaxed py-0"
             style={{ maxHeight: '120px', scrollbarWidth: 'none' }}
           />
           <button
