@@ -125,7 +125,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
 
       {/* Input bar */}
       <div className="flex-shrink-0 px-4 py-3 border-t border-[#222225]">
-        <div className="flex items-end gap-2 bg-[#141415] border border-[#222225] rounded-xl px-3.5 py-2.5 focus-within:border-amber-500/40 transition-colors">
+        <div className="flex items-center gap-2 bg-[#141415] border border-[#222225] rounded-xl px-3.5 py-2.5 focus-within:border-amber-500/40 transition-colors">
           <textarea
             ref={inputRef}
             value={input}
@@ -139,7 +139,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
           <button
             onClick={send}
             disabled={!input.trim() || isStreaming}
-            className="w-8 h-8 rounded-lg bg-amber-500 text-black flex items-center justify-center flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-400 transition-colors mb-0.5"
+            className="w-8 h-8 rounded-lg bg-amber-500 text-black flex items-center justify-center flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-400 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.269 20.876L5.999 12zm0 0h7.5" />
