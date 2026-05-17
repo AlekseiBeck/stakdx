@@ -30,7 +30,7 @@ self.addEventListener('push', (event) => {
     body: payload.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-72.png',
-    tag: payload.tag || 'swingai-alert',
+    tag: payload.tag || 'stakd-alert',
     // iOS ignores: vibrate, actions, requireInteraction
     // Keep it simple for cross-platform compatibility
     data: {

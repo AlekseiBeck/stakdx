@@ -1,8 +1,8 @@
-# SwingAI — Project Documentation
+# Stakd — Project Documentation
 
 ## What It Is
 
-SwingAI is a full-stack AI-powered swing trading dashboard. It fetches live market data for 240+ stocks, runs multi-source analysis through Claude, and surfaces ranked trade recommendations with entry zones, stop losses, targets, and confidence scores. Users can track positions, monitor them with live AI verdicts, and execute paper trades directly against a simulated Alpaca brokerage account.
+Stakd is a full-stack AI-powered swing trading dashboard. It fetches live market data for 240+ stocks, runs multi-source analysis through Claude, and surfaces ranked trade recommendations with entry zones, stop losses, targets, and confidence scores. Users can track positions, monitor them with live AI verdicts, and execute paper trades directly against a simulated Alpaca brokerage account.
 
 ---
 
@@ -199,7 +199,7 @@ Results stream back via SSE (`/api/scan/stream`):
 
 Query params for scan: `?buyingPower=10000&directions=LONG,CALL&mode=long`
 
-### Position Tracking (SwingAI internal)
+### Position Tracking
 
 | Method | Route | Description |
 |---|---|---|

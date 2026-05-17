@@ -1,125 +1,99 @@
-# SwingAI — AI-Powered Swing Trading Assistant
+# Stakd — AI-Powered Swing Trading Assistant
 
-A production-quality swing trading dashboard powered by Claude AI and Alpaca Markets data.
+A full-stack swing trading dashboard powered by Claude AI, Alpaca Markets, and Supabase — with real-time push alerts, an AI chat interface, and paper trading integration.
+
+---
 
 ## Features
 
-- **Daily Market Scan** — Fetches 5 days of OHLCV candles for 10 tickers and asks Claude to rank the best swing trade setups
-- **AI Trade Recommendations** — Ranked table with direction, confidence score, entry zone, stop loss, target, and AI rationale
-- **Position Tracker** — Log positions and get live AI HOLD/SELL/CAUTION verdicts with reasoning
-- **Live News Ticker** — Scrolling market news from Alpaca's news feed
-- **Market Status** — Real-time open/pre-market/after-hours/closed indicator
+- **AI Market Scan** — Screens 240+ tickers daily, surfaces the highest-conviction LONG / SHORT / CALL / PUT setups with entry zones, stops, targets, and confidence scores
+- **AI Trading Chat** — Streaming chat that knows your open positions, live prices, candle data, and latest news; powered by Claude Sonnet 4.6
+- **Stop / Target Alerts** — Push notifications fire the moment a position hits its stop loss or profit target (iOS PWA + Android Chrome)
+- **Position Tracker** — Log trades, get live AI HOLD / SELL / CAUTION verdicts, track paper P&L
+- **Paper Trading** — Execute trades directly against Alpaca's paper brokerage with one tap
+- **Live News** — Market news from Alpaca (24h), Finnhub (72h), and NewsAPI.org (7-day, broader sources)
 - **Demo Mode** — Fully functional with mock data when API keys are not configured
 
 ---
 
 ## Stack
 
-| Layer | Tech |
-|-------|------|
-| Backend | Node.js + TypeScript, Express |
-| AI | Claude claude-sonnet-4-6 (Anthropic SDK) |
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
+| Backend | Node.js, Express, TypeScript |
+| AI | Claude Sonnet 4.6 (Anthropic) |
 | Market Data | Alpaca Markets API |
-| Frontend | React + TypeScript, Vite |
-| Styling | Tailwind CSS |
-
----
-
-## Prerequisites
-
-- Node.js 18+
-- npm 9+
-- Alpaca Markets account (free at [alpaca.markets](https://alpaca.markets))
-- Anthropic API key (at [console.anthropic.com](https://console.anthropic.com))
+| News | Alpaca News · Finnhub · NewsAPI.org |
+| Auth & Database | Supabase (JWT + PostgreSQL) |
+| Paper Trading | Alpaca Paper Trading API |
+| Push Notifications | Web Push (VAPID) — iOS 16.4+ PWA, Android Chrome |
+| Deployment | Railway (backend) · Vercel (frontend) |
 
 ---
 
 ## Setup
 
-### 1. Clone and install dependencies
+### 1. Install dependencies
 
 ```bash
-# Install server dependencies
-cd server
-npm install
-
-# Install client dependencies
-cd ../client
-npm install
+npm run install:all
 ```
 
 ### 2. Configure environment variables
 
-```bash
-cd server
-cp .env.example .env
-```
-
-Edit `server/.env`:
-
+**`server/.env`:**
 ```env
-ANTHROPIC_API_KEY=sk-ant-...
-ALPACA_API_KEY=PK...
-ALPACA_SECRET_KEY=...
+ANTHROPIC_API_KEY=
+ALPACA_API_KEY=
+ALPACA_SECRET_KEY=
 ALPACA_ENDPOINT=https://data.alpaca.markets
+ALPACA_PAPER_ENDPOINT=https://paper-api.alpaca.markets
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+FINNHUB_API_KEY=
+NEWSAPI_KEY=
+ENCRYPTION_KEY=         # 64-char hex string
+VAPID_PUBLIC_KEY=       # npx web-push generate-vapid-keys
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:you@example.com
+CLIENT_URL=http://localhost:3000
+PORT=3001
 ```
 
-> **Note:** The app works without API keys — it will display realistic mock data so you can explore the UI immediately.
+**`client/.env.local`:**
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+```
 
-### 3. Start the servers
+> The app runs in Demo mode with mock data if API keys are absent.
 
-**Terminal 1 — Backend:**
+### 3. Start development servers
+
 ```bash
-cd server
-npm run dev
+# Terminal 1 — backend on :3001
+npm run dev:server
+
+# Terminal 2 — frontend on :3000
+npm run dev:client
 ```
 
-**Terminal 2 — Frontend:**
-```bash
-cd client
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000)
-
 ---
 
-## API Endpoints
+## Push Notifications
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/scan` | Fetch candles + run Claude analysis, returns ranked recommendations |
-| GET | `/api/news` | Fetch latest market news for the watchlist |
-| GET | `/api/positions` | List all tracked positions |
-| POST | `/api/positions` | Add a position `{ ticker, entryPrice, direction }` |
-| DELETE | `/api/positions/:id` | Remove a position |
-| GET | `/api/positions/:ticker/update` | Get fresh Claude HOLD/SELL/CAUTION verdict |
-
----
-
-## Watchlist
-
-AAPL · MSFT · NVDA · TSLA · AMD · SPY · QQQ · META · AMZN · GOOGL
-
-To change the watchlist, edit `server/src/alpaca.ts` → `WATCHLIST` array.
-
----
-
-## Alpaca API Notes
-
-- Uses the **IEX feed** (free tier) for market data
-- News endpoint requires a funded or paper trading account
-- If you only have a paper account, set `ALPACA_ENDPOINT=https://data.alpaca.markets`
+- Requires `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` in `server/.env`
+- Generate keys: `npx web-push generate-vapid-keys`
+- **iOS:** Must be installed as a PWA (Safari → Share → Add to Home Screen). Requires iOS 16.4+
+- **Android:** Works in Chrome without installation
+- Alerts check every 2 minutes during market hours (9:30 AM – 4:00 PM ET, Mon–Fri)
 
 ---
 
 ## Production Build
 
 ```bash
-# Build server
-cd server && npm run build
-
-# Build client
-cd ../client && npm run build
-# Serve client/dist with any static file server
+npm run build:server   # tsc → server/dist/
+npm run build:client   # tsc + vite → client/dist/
 ```

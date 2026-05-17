@@ -1,5 +1,5 @@
 /**
- * SwingAI Icon Generator
+ * Stakd Icon Generator
  * Run this once to create all required PWA icons:
  *   node generate-icons.js
  *

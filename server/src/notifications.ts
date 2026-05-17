@@ -8,7 +8,7 @@ import { StoredPushSubscription } from './types';
 export function initWebPush(): void {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@swingai.app';
+  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@stakd.com';
 
   if (!publicKey || !privateKey) {
     console.warn('[notifications] VAPID keys not set — push notifications disabled.');
