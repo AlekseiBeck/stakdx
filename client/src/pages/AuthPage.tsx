@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 
-type Mode = 'landing' | 'login' | 'signup' | 'forgot';
+type Mode = 'landing' | 'login' | 'signup' | 'forgot' | 'verify';
 
 function StakdxLogo({ size = 'h-8' }: { size?: string }) {
   return <img src="/stakd-logo.png" className={`${size} w-auto rounded-lg`} alt="" />;
@@ -57,8 +57,7 @@ export default function AuthPage() {
       } else if (mode === 'signup') {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        setMessage('Account created! You can now sign in.');
-        reset('login');
+        setMode('verify');
         setPassword('');
       } else if (mode === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -136,6 +135,44 @@ export default function AuthPage() {
     );
   }
 
+  if (mode === 'verify') {
+    return (
+      <div className="min-h-screen bg-[#0c0c0d] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:48px_48px] pointer-events-none" />
+        <div className="relative w-full max-w-sm text-center">
+          <div className="flex items-center justify-center gap-2 mb-8">
+            <StakdxLogo size="h-8" />
+            <h1 className="text-2xl font-bold text-white">Stakdx</h1>
+          </div>
+          <div className="bg-[#141415] border border-[#222225] rounded-xl p-8 shadow-2xl shadow-black/50">
+            <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-5">
+              <svg className="w-7 h-7 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-semibold text-white mb-2">Check your email</h2>
+            <p className="text-sm text-gray-400 leading-relaxed mb-1">
+              We sent a confirmation link to
+            </p>
+            <p className="text-sm font-medium text-amber-400 mb-5">{email}</p>
+            <p className="text-xs text-gray-600 leading-relaxed mb-6">
+              Click the link in that email to activate your account, then come back here to sign in.
+            </p>
+            <button
+              onClick={() => reset('login')}
+              className="btn-primary w-full justify-center"
+            >
+              Go to Sign In
+            </button>
+          </div>
+          <p className="text-center text-xs text-gray-700 mt-4">
+            <button onClick={() => reset('landing')} className="hover:text-gray-500 transition-colors">← Back to home</button>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0c0c0d] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:48px_48px] pointer-events-none" />
@@ -147,7 +184,7 @@ export default function AuthPage() {
             <h1 className="text-2xl font-bold text-white">Stakdx</h1>
           </div>
           <p className="text-gray-600 text-sm mt-1">
-            {mode === 'forgot' ? 'Reset your password' : 'Welcome back'}
+            {mode === 'forgot' ? 'Reset your password' : mode === 'signup' ? 'Create your account' : 'Welcome back'}
           </p>
         </div>
 
