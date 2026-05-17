@@ -79,7 +79,7 @@ export default function AuthPage() {
 
   if (mode === 'landing') {
     return (
-      <div className="min-h-screen bg-[#0c0c0d] flex flex-col">
+      <div className="h-full overflow-y-auto bg-[#0c0c0d] flex flex-col">
         {/* Subtle grid texture */}
         <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:48px_48px] pointer-events-none" />
 
@@ -141,7 +141,7 @@ export default function AuthPage() {
 
   if (mode === 'verify') {
     return (
-      <div className="min-h-screen bg-[#0c0c0d] flex items-center justify-center p-4">
+      <div className="h-full overflow-y-auto bg-[#0c0c0d] flex items-center justify-center p-4">
         <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:48px_48px] pointer-events-none" />
         <div className="relative w-full max-w-sm text-center">
           <div className="flex items-center justify-center gap-2 mb-8">
@@ -178,7 +178,7 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0c0c0d] flex items-center justify-center p-4">
+    <div className="h-full overflow-y-auto bg-[#0c0c0d] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:48px_48px] pointer-events-none" />
       <div className="relative w-full max-w-sm">
         {/* Logo */}
