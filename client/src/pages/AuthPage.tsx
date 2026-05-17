@@ -1,10 +1,44 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 
-type Mode = 'login' | 'signup' | 'forgot';
+type Mode = 'landing' | 'login' | 'signup' | 'forgot';
+
+function StakdLogo({ size = 'h-8' }: { size?: string }) {
+  return <img src="/stakd-logo.png" className={`${size} w-auto rounded-lg`} alt="" />;
+}
+
+const FEATURES = [
+  {
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
+      </svg>
+    ),
+    title: 'Daily Market Scan',
+    desc: 'AI screens 240+ tickers every morning and surfaces the highest-conviction swing setups — long, short, calls, and puts.',
+  },
+  {
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.235 2.235 0 00-.1.661z" />
+      </svg>
+    ),
+    title: 'Stop / Target Alerts',
+    desc: 'Track open positions and receive push notifications the moment price hits your stop loss or profit target.',
+  },
+  {
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
+      </svg>
+    ),
+    title: 'AI Trading Chat',
+    desc: 'Ask anything — "should I hold NVDA through earnings?" The AI knows your positions, live prices, and the latest news.',
+  },
+];
 
 export default function AuthPage() {
-  const [mode, setMode] = useState<Mode>('login');
+  const [mode, setMode] = useState<Mode>('landing');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,7 +60,7 @@ export default function AuthPage() {
         setMessage('Account created! You can now sign in.');
         reset('login');
         setPassword('');
-      } else {
+      } else if (mode === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
         });
@@ -40,31 +74,93 @@ export default function AuthPage() {
     }
   };
 
+  if (mode === 'landing') {
+    return (
+      <div className="min-h-screen bg-[#0c0c0d] flex flex-col">
+        {/* Subtle grid texture */}
+        <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:48px_48px] pointer-events-none" />
+
+        {/* Nav */}
+        <nav className="relative flex items-center justify-between px-6 py-4 border-b border-[#1a1a1c]">
+          <div className="flex items-center gap-2">
+            <StakdLogo size="h-6" />
+            <span className="text-lg font-bold tracking-tight text-white">Stakd</span>
+          </div>
+          <button
+            onClick={() => reset('login')}
+            className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-1.5 rounded-lg border border-[#222225] hover:border-[#333336]"
+          >
+            Sign In
+          </button>
+        </nav>
+
+        {/* Hero */}
+        <div className="relative flex-1 flex flex-col items-center justify-center px-6 py-16 text-center">
+          <div className="mb-6">
+            <StakdLogo size="h-14" />
+          </div>
+          <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4 max-w-xl">
+            Trade with an<br /><span className="text-amber-500">edge.</span>
+          </h1>
+          <p className="text-gray-400 text-lg max-w-md mb-10 leading-relaxed">
+            AI-powered swing trading analysis. Daily setups, real-time alerts, and a market-aware AI you can actually talk to.
+          </p>
+          <button
+            onClick={() => reset('signup')}
+            className="btn-primary text-base px-8 py-3 mb-4"
+          >
+            Get Started Free
+          </button>
+          <p className="text-xs text-gray-600">No credit card required</p>
+        </div>
+
+        {/* Features */}
+        <div className="relative px-6 pb-16">
+          <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {FEATURES.map((f) => (
+              <div key={f.title} className="bg-[#141415] border border-[#222225] rounded-xl p-5">
+                <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 mb-3">
+                  {f.icon}
+                </div>
+                <h3 className="text-sm font-semibold text-white mb-1.5">{f.title}</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <footer className="relative text-center text-xs text-gray-700 pb-6">
+          For informational purposes only. Not financial advice.
+        </footer>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.03)_1px,transparent_1px)] bg-[size:64px_64px]" />
+    <div className="min-h-screen bg-[#0c0c0d] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:48px_48px] pointer-events-none" />
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/20">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
-            </svg>
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <StakdLogo size="h-8" />
+            <h1 className="text-2xl font-bold text-white">Stakd</h1>
           </div>
-          <h1 className="text-2xl font-bold text-white">SwingAI</h1>
-          <p className="text-gray-500 text-sm mt-1">AI-Powered Trading Assistant</p>
+          <p className="text-gray-600 text-sm mt-1">
+            {mode === 'forgot' ? 'Reset your password' : 'Welcome back'}
+          </p>
         </div>
 
-        <div className="card p-6 shadow-2xl shadow-black/50">
-          {/* Tabs — only show for login/signup */}
+        <div className="bg-[#141415] border border-[#222225] rounded-xl p-6 shadow-2xl shadow-black/50">
+          {/* Tabs */}
           {mode !== 'forgot' && (
-            <div className="flex rounded-lg bg-[#141d35] p-1 mb-6">
+            <div className="flex rounded-lg bg-[#0c0c0d] p-1 mb-6">
               <button type="button" onClick={() => reset('login')}
-                className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${mode === 'login' ? 'bg-[#0f1629] text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>
+                className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${mode === 'login' ? 'bg-[#1e1e20] text-white shadow-sm' : 'text-gray-600 hover:text-gray-300'}`}>
                 Sign In
               </button>
               <button type="button" onClick={() => reset('signup')}
-                className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${mode === 'signup' ? 'bg-[#0f1629] text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>
+                className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${mode === 'signup' ? 'bg-[#1e1e20] text-white shadow-sm' : 'text-gray-600 hover:text-gray-300'}`}>
                 Create Account
               </button>
             </div>
@@ -78,8 +174,7 @@ export default function AuthPage() {
                 </svg>
                 Back to sign in
               </button>
-              <h2 className="text-lg font-bold text-white mt-3">Reset your password</h2>
-              <p className="text-gray-500 text-sm mt-1">Enter your email and we'll send a reset link.</p>
+              <p className="text-gray-500 text-sm mt-4">Enter your email and we'll send a reset link.</p>
             </div>
           )}
 
@@ -88,7 +183,7 @@ export default function AuthPage() {
               <label className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com" required
-                className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-600" />
+                className="w-full bg-[#0c0c0d] border border-[#2a2a2c] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-700" />
             </div>
 
             {mode !== 'forgot' && (
@@ -96,14 +191,14 @@ export default function AuthPage() {
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••" required minLength={6}
-                  className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-600" />
+                  className="w-full bg-[#0c0c0d] border border-[#2a2a2c] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-700" />
               </div>
             )}
 
             {mode === 'login' && (
               <div className="text-right -mt-1">
                 <button type="button" onClick={() => reset('forgot')}
-                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                  className="text-xs text-gray-600 hover:text-amber-500 transition-colors">
                   Forgot password?
                 </button>
               </div>
@@ -137,8 +232,11 @@ export default function AuthPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-gray-600 mt-4">
+        <p className="text-center text-xs text-gray-700 mt-4">
           For informational purposes only. Not financial advice.
+        </p>
+        <p className="text-center text-xs text-gray-700 mt-1">
+          <button onClick={() => reset('landing')} className="hover:text-gray-500 transition-colors">← Back to home</button>
         </p>
       </div>
     </div>

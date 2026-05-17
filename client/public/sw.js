@@ -1,7 +1,7 @@
-// SwingAI Service Worker
+// Stakd Service Worker
 // Handles push notifications for iOS (16.4+, requires PWA install) and Android
 
-const CACHE_NAME = 'swingai-v1';
+const CACHE_NAME = 'stakd-v1';
 
 // ─── Install & activate ───────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
@@ -23,7 +23,7 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: 'SwingAI Alert', body: event.data.text() };
+    payload = { title: 'Stakd Alert', body: event.data.text() };
   }
 
   const options = {
@@ -39,7 +39,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'SwingAI', options)
+    self.registration.showNotification(payload.title || 'Stakd', options)
   );
 });
 

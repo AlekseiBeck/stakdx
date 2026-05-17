@@ -65,17 +65,17 @@ export default function ExecuteTradeModal({ isOpen, onClose, recommendation, cur
       onClick={handleClose}
     >
       <div
-        className="w-full max-w-sm bg-[#0d1424] border border-[#16213a] rounded-2xl shadow-2xl"
+        className="w-full max-w-sm bg-[#141415] border border-[#222225] rounded-2xl shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#16213a]">
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#222225]">
           <h2 className={`text-lg font-bold mono ${directionColor}`}>
             {side.toUpperCase()} {ticker}
           </h2>
           <button
             onClick={handleClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-400 hover:bg-[#16213a] transition-all"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-400 hover:bg-[#1e1e20] transition-all"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -85,15 +85,15 @@ export default function ExecuteTradeModal({ isOpen, onClose, recommendation, cur
 
         <div className="px-5 py-4 space-y-4">
           {/* Paper trade warning */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-blue-950/40 border border-blue-800/40 rounded-lg">
-            <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="flex items-center gap-2 px-3 py-2 bg-[#1a1a1c] border border-[#2a2a2c] rounded-lg">
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
             </svg>
-            <p className="text-xs text-blue-400 font-medium">This is a paper trade — no real money involved</p>
+            <p className="text-xs text-gray-400 font-medium">This is a paper trade — no real money involved</p>
           </div>
 
           {/* Order details */}
-          <div className="bg-[#0a0e1a] rounded-lg border border-[#16213a] divide-y divide-[#16213a]">
+          <div className="bg-[#111112] rounded-lg border border-[#222225] divide-y divide-[#222225]">
             <div className="flex justify-between items-center px-3 py-2">
               <span className="text-xs text-gray-500">Order Type</span>
               <span className="text-xs mono text-gray-300 font-semibold">Market</span>
@@ -145,7 +145,7 @@ export default function ExecuteTradeModal({ isOpen, onClose, recommendation, cur
             <button
               onClick={handleClose}
               disabled={loading}
-              className="flex-1 py-2.5 px-4 rounded-lg border border-[#16213a] text-gray-400 hover:text-white hover:border-[#2a3a5e] text-sm font-semibold transition-all disabled:opacity-50"
+              className="flex-1 py-2.5 px-4 rounded-lg border border-[#222225] text-gray-400 hover:text-white hover:border-[#333336] text-sm font-semibold transition-all disabled:opacity-50"
             >
               Cancel
             </button>

@@ -47,20 +47,6 @@ function ConfidenceScore({ value }: { value: number }) {
   );
 }
 
-function SentimentBadge({ sentiment }: { sentiment?: TradeRecommendation['socialSentiment'] }) {
-  if (!sentiment) return <span className="text-xs text-gray-600 mono">&#9898; No social data</span>;
-  const configs = {
-    bullish: { dot: '🟢', cls: 'text-emerald-400', label: 'Bullish social' },
-    bearish: { dot: '🔴', cls: 'text-red-400', label: 'Bearish social' },
-    neutral: { dot: '⚪', cls: 'text-gray-400', label: 'Neutral social' },
-  };
-  const cfg = configs[sentiment.sentiment];
-  return (
-    <span className={`text-xs ${cfg.cls}`}>
-      {cfg.dot} {cfg.label}
-    </span>
-  );
-}
 
 function calcRR(rec: TradeRecommendation): string | null {
   const entry = parseFloat(rec.entryZone.replace(/[^0-9.]/g, ''));
@@ -91,7 +77,7 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
 
   return (
     <div
-      className={`card-elevated fade-in-up cursor-pointer transition-all duration-200 hover:border-[#2a3a5e] ${expanded ? 'border-[#2a3a5e]' : ''}`}
+      className={`card-elevated fade-in-up cursor-pointer transition-all duration-200 hover:border-[#333336] ${expanded ? 'border-[#333336]' : ''}`}
       style={{ animationDelay: `${Math.min(index * 60, 400)}ms`, opacity: 0 }}
       onClick={() => setExpanded((v) => !v)}
     >
@@ -119,9 +105,9 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
 
         {/* Middle: entry / stop / target grid */}
         <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="bg-[#0a0e1a] rounded-lg px-3 py-2">
+          <div className="bg-[#111112] rounded-lg px-3 py-2">
             <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-0.5">Entry</div>
-            <div className="mono text-sm font-bold text-cyan-400">{rec.entryZone}</div>
+            <div className="mono text-sm font-bold text-white">{rec.entryZone}</div>
           </div>
           <div className="bg-red-950/30 rounded-lg px-3 py-2">
             <div className="text-[10px] text-red-700 uppercase tracking-wider font-semibold mb-0.5">Stop</div>
@@ -133,25 +119,22 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
           </div>
         </div>
 
-        {/* Bottom row: pattern + timeframe + R/R + sentiment */}
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400 bg-[#0d1830] px-2 py-0.5 rounded border border-[#1a2442]">
-              {rec.pattern}
-            </span>
-            <span className="text-xs text-gray-600">{rec.timeframe}</span>
-            {rr && (
-              <span className="text-xs mono font-semibold text-blue-400">{rr}:1 R/R</span>
-            )}
-          </div>
-          <SentimentBadge sentiment={rec.socialSentiment} />
+        {/* Bottom row: pattern + timeframe + R/R */}
+        <div className="flex items-center flex-wrap gap-2">
+          <span className="text-xs text-gray-400 bg-[#1e1e20] px-2 py-0.5 rounded border border-[#222225]">
+            {rec.pattern}
+          </span>
+          <span className="text-xs text-gray-600">{rec.timeframe}</span>
+          {rr && (
+            <span className="text-xs mono font-semibold text-amber-400">{rr}:1 R/R</span>
+          )}
         </div>
       </div>
 
       {/* Expanded detail */}
       {expanded && (
         <div
-          className="border-t border-[#16213a] px-4 py-4 space-y-4"
+          className="border-t border-[#222225] px-4 py-4 space-y-4"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Position sizing detail */}
@@ -183,24 +166,13 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
           {/* AI Rationale */}
           <div>
             <div className="flex items-center gap-1.5 mb-2">
-              <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
               </svg>
-              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">AI Rationale</span>
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">AI Rationale</span>
             </div>
             <p className="text-sm text-gray-300 leading-relaxed">{rec.rationale}</p>
           </div>
-
-          {/* Social sentiment expanded */}
-          {rec.socialSentiment && (
-            <div className="bg-[#0a0e1a] rounded-lg px-3 py-2.5 border border-[#16213a]">
-              <div className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">Social Sentiment</div>
-              <div className="flex items-center gap-2">
-                <SentimentBadge sentiment={rec.socialSentiment} />
-                <span className="text-xs text-gray-400">— {rec.socialSentiment.signal}</span>
-              </div>
-            </div>
-          )}
 
           {/* Track Position button */}
           <div className="pt-1 space-y-2">
@@ -222,7 +194,7 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
                   e.stopPropagation();
                   setShowTradeModal(true);
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-cyan-700/60 text-cyan-400 hover:bg-cyan-950/40 hover:border-cyan-600 text-sm font-semibold transition-all"
+                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-[#333336] text-gray-400 hover:bg-[#1e1e20] hover:border-[#555558] hover:text-gray-300 text-sm font-semibold transition-all"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />

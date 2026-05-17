@@ -154,14 +154,14 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[#1a2442]">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[#222225]">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
           </svg>
           <h2 className="font-bold text-white">Active Positions</h2>
           {positions.length > 0 && (
-            <span className="bg-blue-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{positions.length}</span>
+            <span className="bg-amber-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">{positions.length}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -213,34 +213,34 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
       {/* iOS "Add to Home Screen" install banner */}
       {showIOSBanner && !iosBannerDismissed && (
-        <div className="mx-4 mt-4 p-3.5 rounded-xl bg-blue-950/60 border border-blue-700/40">
+        <div className="mx-4 mt-4 p-3.5 rounded-xl bg-[#1a1a1c] border border-[#2a2a2c]">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-2.5">
               <div className="mt-0.5 flex-shrink-0">
-                <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-semibold text-blue-300">Enable Stop/Target Alerts on iPhone</p>
-                <p className="text-xs text-blue-400/80 mt-0.5 leading-relaxed">
-                  To receive push notifications, install SwingAI on your Home Screen:
+                <p className="text-sm font-semibold text-amber-300">Enable Stop/Target Alerts on iPhone</p>
+                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                  To receive push notifications, install Stakd on your Home Screen:
                 </p>
-                <ol className="text-xs text-blue-400/70 mt-1.5 space-y-0.5 leading-relaxed">
-                  <li>1. Tap the <strong className="text-blue-300">Share</strong> button in Safari (
+                <ol className="text-xs text-gray-500 mt-1.5 space-y-0.5 leading-relaxed">
+                  <li>1. Tap the <strong className="text-amber-300">Share</strong> button in Safari (
                     <svg className="inline w-3.5 h-3.5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15" />
                     </svg>
                   )</li>
-                  <li>2. Scroll down and tap <strong className="text-blue-300">"Add to Home Screen"</strong></li>
-                  <li>3. Open SwingAI from your Home Screen and enable alerts here</li>
+                  <li>2. Scroll down and tap <strong className="text-amber-300">"Add to Home Screen"</strong></li>
+                  <li>3. Open Stakd from your Home Screen and enable alerts here</li>
                 </ol>
-                <p className="text-[10px] text-blue-500/60 mt-1.5">Requires iOS 16.4 or later · Safari only</p>
+                <p className="text-[10px] text-gray-600 mt-1.5">Requires iOS 16.4 or later · Safari only</p>
               </div>
             </div>
             <button
               onClick={() => setIosBannerDismissed(true)}
-              className="flex-shrink-0 text-blue-500/60 hover:text-blue-400 transition-colors"
+              className="flex-shrink-0 text-gray-500 hover:text-gray-300 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -252,7 +252,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
       {positions.length === 0 && paperPositions.length === 0 ? (
         <div className="p-8 text-center">
-          <div className="w-12 h-12 rounded-full bg-[#1a2442] flex items-center justify-center mx-auto mb-3">
+          <div className="w-12 h-12 rounded-full bg-[#1e1e20] flex items-center justify-center mx-auto mb-3">
             <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25" />
             </svg>
@@ -261,7 +261,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
           <p className="text-gray-600 text-xs mt-1">Add a position to track it with AI</p>
         </div>
       ) : (
-        <div className="divide-y divide-[#1a2442]/60">
+        <div className="divide-y divide-[#222225]/60">
           {/* Paper account positions (live from Alpaca) */}
           {paperPositions.length > 0 && (
             <div className="px-5 py-3">
@@ -275,7 +275,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
                   const pl = parseFloat(pos.unrealized_pl);
                   const plPct = (parseFloat(pos.unrealized_plpc) * 100).toFixed(2);
                   return (
-                    <div key={pos.symbol} className="bg-[#0a0e1a] rounded-lg px-3 py-2.5 border border-[#16213a]">
+                    <div key={pos.symbol} className="bg-[#111112] rounded-lg px-3 py-2.5 border border-[#222225]">
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
                           <span className="mono font-bold text-white text-sm">{pos.symbol}</span>
@@ -406,7 +406,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
                 {update?.data && cfg && (
                   <div className={`rounded-lg p-3 mt-2 border ${
-                    update.data.verdict === 'HOLD' ? 'bg-blue-900/10 border-blue-800/30' :
+                    update.data.verdict === 'HOLD' ? 'bg-[#111112] border-[#2a2a2c]' :
                     update.data.verdict === 'SELL' ? 'bg-red-900/10 border-red-800/30' :
                     'bg-amber-900/10 border-amber-800/30'
                   }`}>

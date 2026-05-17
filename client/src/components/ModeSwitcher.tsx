@@ -8,7 +8,7 @@ interface Props {
 
 const OPTIONS: { value: ScanMode; label: string; activeClass: string }[] = [
   { value: 'long', label: 'LONG', activeClass: 'bg-emerald-600 text-white' },
-  { value: 'both', label: 'BOTH', activeClass: 'bg-blue-600 text-white' },
+  { value: 'both', label: 'BOTH', activeClass: 'bg-[#3a3a3f] text-gray-100' },
   { value: 'short', label: 'SHORT', activeClass: 'bg-red-600 text-white' },
 ];
 

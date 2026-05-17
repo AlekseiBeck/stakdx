@@ -85,7 +85,7 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
               value={ticker}
               onChange={(e) => setTicker(e.target.value.toUpperCase())}
               placeholder="e.g. NVDA"
-              className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg px-3 py-2.5 text-white mono font-bold text-base focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full bg-[#141415] border border-[#222225] rounded-lg px-3 py-2.5 text-white mono font-bold text-base focus:outline-none focus:border-amber-500/60 transition-colors"
               maxLength={6}
               required
             />
@@ -102,7 +102,7 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
                 placeholder="0.00"
                 step="0.01"
                 min="0.01"
-                className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg pl-7 pr-3 py-2.5 text-white mono focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full bg-[#141415] border border-[#222225] rounded-lg pl-7 pr-3 py-2.5 text-white mono focus:outline-none focus:border-amber-500/60 transition-colors"
                 required
               />
             </div>
@@ -117,7 +117,7 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
                 className={`py-2.5 rounded-lg font-semibold text-sm transition-all ${
                   direction === 'long'
                     ? 'bg-emerald-900/60 border border-emerald-600 text-emerald-400'
-                    : 'bg-[#141d35] border border-[#1a2442] text-gray-400 hover:border-emerald-700/50'
+                    : 'bg-[#141415] border border-[#222225] text-gray-400 hover:border-emerald-700/50'
                 }`}
               >
                 LONG
@@ -128,7 +128,7 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
                 className={`py-2.5 rounded-lg font-semibold text-sm transition-all ${
                   direction === 'short'
                     ? 'bg-red-900/60 border border-red-600 text-red-400'
-                    : 'bg-[#141d35] border border-[#1a2442] text-gray-400 hover:border-red-700/50'
+                    : 'bg-[#141415] border border-[#222225] text-gray-400 hover:border-red-700/50'
                 }`}
               >
                 SHORT
@@ -137,12 +137,12 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
           </div>
 
           {/* Stop loss + target — for push alerts */}
-          <div className="rounded-xl border border-[#1a2442] bg-[#0d1629]/60 p-4 space-y-3">
+          <div className="rounded-xl border border-[#222225] bg-[#0d0d0e]/60 p-4 space-y-3">
             <div className="flex items-center gap-2 mb-0.5">
-              <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
               </svg>
-              <span className="text-xs font-semibold text-blue-400">Alert Levels</span>
+              <span className="text-xs font-semibold text-amber-400">Alert Levels</span>
               <span className="text-[10px] text-gray-600 ml-auto">Optional — triggers push notification</span>
             </div>
 
@@ -160,7 +160,7 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
                     placeholder="0.00"
                     step="0.01"
                     min="0.01"
-                    className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg pl-6 pr-2 py-2 text-red-400 mono text-sm focus:outline-none focus:border-red-600/50 transition-colors"
+                    className="w-full bg-[#141415] border border-[#222225] rounded-lg pl-6 pr-2 py-2 text-red-400 mono text-sm focus:outline-none focus:border-red-600/50 transition-colors"
                   />
                 </div>
               </div>
@@ -177,14 +177,14 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
                     placeholder="0.00"
                     step="0.01"
                     min="0.01"
-                    className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg pl-6 pr-2 py-2 text-emerald-400 mono text-sm focus:outline-none focus:border-emerald-600/50 transition-colors"
+                    className="w-full bg-[#141415] border border-[#222225] rounded-lg pl-6 pr-2 py-2 text-emerald-400 mono text-sm focus:outline-none focus:border-emerald-600/50 transition-colors"
                   />
                 </div>
               </div>
             </div>
 
             {hasAlerts && (
-              <p className="text-[10px] text-blue-400/60 leading-relaxed">
+              <p className="text-[10px] text-gray-500 leading-relaxed">
                 You'll receive a push notification when the price crosses these levels — even with the app closed.
               </p>
             )}

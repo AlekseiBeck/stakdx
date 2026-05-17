@@ -56,21 +56,21 @@ export default function ConnectBrokerageModal({ isOpen, onClose, onConnected }: 
       onClick={handleClose}
     >
       <div
-        className="w-full max-w-md bg-[#0d1424] border border-[#16213a] rounded-2xl shadow-2xl"
+        className="w-full max-w-md bg-[#141415] border border-[#222225] rounded-2xl shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="relative px-6 pt-6 pb-4 border-b border-[#16213a] text-center">
+        <div className="relative px-6 pt-6 pb-4 border-b border-[#222225] text-center">
           <button
             onClick={handleClose}
-            className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-400 hover:bg-[#16213a] transition-all"
+            className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-400 hover:bg-[#1e1e20] transition-all"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <div className="w-12 h-12 rounded-full bg-[#0a0e1a] border border-[#16213a] flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="w-12 h-12 rounded-full bg-[#111112] border border-[#222225] flex items-center justify-center mx-auto mb-3">
+            <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
             </svg>
           </div>
@@ -90,7 +90,7 @@ export default function ConnectBrokerageModal({ isOpen, onClose, onConnected }: 
                 className={`flex-1 py-2 px-3 rounded-lg border text-sm font-semibold transition-all ${
                   accountType === 'paper'
                     ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-400'
-                    : 'bg-[#0a0e1a] border-[#16213a] text-gray-500 hover:border-[#2a3a5e] hover:text-gray-400'
+                    : 'bg-[#111112] border-[#222225] text-gray-500 hover:border-[#333336] hover:text-gray-400'
                 }`}
               >
                 Paper Trading
@@ -100,7 +100,7 @@ export default function ConnectBrokerageModal({ isOpen, onClose, onConnected }: 
                 className={`flex-1 py-2 px-3 rounded-lg border text-sm font-semibold transition-all ${
                   accountType === 'live'
                     ? 'bg-red-950/60 border-red-700/60 text-red-400'
-                    : 'bg-[#0a0e1a] border-[#16213a] text-gray-500 hover:border-[#2a3a5e] hover:text-gray-400'
+                    : 'bg-[#111112] border-[#222225] text-gray-500 hover:border-[#333336] hover:text-gray-400'
                 }`}
               >
                 Live Trading
@@ -125,7 +125,7 @@ export default function ConnectBrokerageModal({ isOpen, onClose, onConnected }: 
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="PKXXXXXXXXXXXXXXXXXXXXX"
                 autoComplete="off"
-                className="w-full bg-[#0a0e1a] border border-[#16213a] rounded-lg px-3 py-2.5 pr-10 text-white mono text-sm focus:outline-none focus:border-blue-600 transition-colors placeholder-gray-700"
+                className="w-full bg-[#111112] border border-[#222225] rounded-lg px-3 py-2.5 pr-10 text-white mono text-sm focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-700"
               />
               <button
                 type="button"
@@ -158,7 +158,7 @@ export default function ConnectBrokerageModal({ isOpen, onClose, onConnected }: 
                 onChange={(e) => setSecretKey(e.target.value)}
                 placeholder="Enter your Alpaca secret key"
                 autoComplete="off"
-                className="w-full bg-[#0a0e1a] border border-[#16213a] rounded-lg px-3 py-2.5 pr-10 text-white mono text-sm focus:outline-none focus:border-blue-600 transition-colors placeholder-gray-700"
+                className="w-full bg-[#111112] border border-[#222225] rounded-lg px-3 py-2.5 pr-10 text-white mono text-sm focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-700"
               />
               <button
                 type="button"
@@ -205,7 +205,7 @@ export default function ConnectBrokerageModal({ isOpen, onClose, onConnected }: 
           <button
             onClick={handleConnect}
             disabled={loading || success}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold text-sm transition-colors"
           >
             {loading ? (
               <>
@@ -227,7 +227,7 @@ export default function ConnectBrokerageModal({ isOpen, onClose, onConnected }: 
               href="https://app.alpaca.markets/paper-accounts"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-500 hover:text-blue-400"
+              className="text-amber-500/70 hover:text-amber-500"
             >
               app.alpaca.markets
             </a>

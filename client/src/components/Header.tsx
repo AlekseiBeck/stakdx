@@ -56,7 +56,7 @@ export default function Header({
   const sessionConfig = {
     open:   { label: 'OPEN',   color: 'text-emerald-400', dotColor: 'bg-emerald-400', border: 'border-emerald-800/60 bg-emerald-950/40' },
     pre:    { label: 'PRE',    color: 'text-amber-400',   dotColor: 'bg-amber-400',   border: 'border-amber-800/60 bg-amber-950/40'   },
-    after:  { label: 'AH',     color: 'text-blue-400',    dotColor: 'bg-blue-400',    border: 'border-blue-800/60 bg-blue-950/40'     },
+    after:  { label: 'AH',     color: 'text-violet-400',  dotColor: 'bg-violet-400',  border: 'border-violet-800/60 bg-violet-950/40'  },
     closed: { label: 'CLOSED', color: 'text-gray-500',    dotColor: 'bg-gray-600',    border: 'border-gray-800/60 bg-gray-950/40'     },
   };
 
@@ -81,10 +81,15 @@ export default function Header({
   );
 
   return (
-    <header className="border-b border-[#16213a] bg-[#070b14]/95 backdrop-blur-md sticky top-0 z-50 safe-top">
+    <header className="border-b border-[#222225] bg-[#0c0c0d]/95 backdrop-blur-md sticky top-0 z-50 safe-top">
 
       {/* Desktop: single row (>=1024px) */}
       <div className="hidden lg:flex max-w-[1600px] mx-auto px-6 py-3 items-center gap-4">
+        {/* Logo */}
+        <div className="flex items-center gap-2 flex-shrink-0 pr-2 border-r border-[#222225]">
+          <img src="/stakd-logo.png" className="h-6 w-auto rounded-md" alt="" />
+          <span className="text-base font-bold tracking-tight text-white">Stakd</span>
+        </div>
         <div className="flex-shrink-0"><ModeSwitcher mode={mode} onChange={onModeChange} /></div>
 
         <div className="hidden sm:flex items-center flex-shrink-0">
@@ -95,7 +100,7 @@ export default function Header({
               value={buyingPower}
               onChange={(e) => onBuyingPowerChange(e.target.value.replace(/[^0-9.,]/g, ''))}
               placeholder="Buying power"
-              className="w-32 bg-[#0d1424] border border-[#16213a] rounded-lg pl-6 pr-3 py-1.5 text-white mono text-xs focus:outline-none focus:border-blue-600 transition-colors placeholder-gray-700"
+              className="w-32 bg-[#141415] border border-[#222225] rounded-lg pl-6 pr-3 py-1.5 text-white mono text-xs focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-700"
             />
           </div>
         </div>
@@ -107,7 +112,7 @@ export default function Header({
         <div className="flex-1" />
 
         <div className="hidden md:flex items-center gap-3">
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold mono ${cfg.border} ${cfg.color}`}>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-bold mono ${cfg.border} ${cfg.color} border-[#222225]`}>
             <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dotColor}`} />
             {cfg.label}
           </div>
@@ -118,7 +123,7 @@ export default function Header({
         </div>
 
         {lastScanTime && (
-          <div className="hidden lg:block text-right border-l border-[#16213a] pl-3">
+          <div className="hidden lg:block text-right border-l border-[#222225] pl-3">
             <div className="text-[10px] text-gray-600">Last scan</div>
             <div className="text-xs text-gray-400 mono">
               {lastScanTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
@@ -138,12 +143,12 @@ export default function Header({
             Paper
           </button>
         ) : (
-          <button onClick={onOpenConnectModal} className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#1e3a5f] text-cyan-500 text-xs font-semibold hover:border-cyan-700/60 hover:text-cyan-400 transition-all flex-shrink-0">
+          <button onClick={onOpenConnectModal} className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#222225] text-gray-500 text-xs font-semibold hover:border-[#333336] hover:text-gray-300 transition-all flex-shrink-0">
             Connect Broker
           </button>
         )}
 
-        <div className="flex items-center gap-2 pl-2 border-l border-[#16213a]">
+        <div className="flex items-center gap-2 pl-2 border-l border-[#222225]">
           <div className="hidden lg:block text-right">
             <div className="text-xs text-gray-500 truncate max-w-[120px]">{userEmail}</div>
           </div>
@@ -158,8 +163,12 @@ export default function Header({
       {/* Mobile: two rows (<1024px) */}
       <div className="lg:hidden">
 
-        {/* Row 1: mode switcher + market status + sign out */}
+        {/* Row 1: logo + mode switcher + market status + sign out */}
         <div className="flex items-center gap-2 px-3 pt-2 pb-2">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <img src="/stakd-logo.png" className="h-5 w-auto rounded-md" alt="" />
+            <span className="text-sm font-bold tracking-tight text-white">Stakd</span>
+          </div>
           <div className="flex-1 min-w-0">
             <ModeSwitcher mode={mode} onChange={onModeChange} />
           </div>
@@ -167,12 +176,11 @@ export default function Header({
           <div className={`flex items-center gap-1 px-2 py-1 rounded-md border text-[10px] font-bold mono flex-shrink-0 ${cfg.border} ${cfg.color}`}>
             <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dotColor}`} />
             {cfg.label}
-            <span className="text-gray-600 ml-1">{etTime}</span>
           </div>
 
           <button
             onClick={onSignOut}
-            className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#161f36] border border-[#1e2d4d] text-gray-400 hover:text-red-400 hover:bg-red-950/20 active:scale-95 transition-all flex-shrink-0"
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#1e1e20] border border-[#2a2a2c] text-gray-400 hover:text-red-400 hover:bg-red-950/20 active:scale-95 transition-all flex-shrink-0"
             title="Sign out"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

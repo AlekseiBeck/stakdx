@@ -40,7 +40,7 @@ async function fetchSubredditPosts(subreddit: string, limit = 50): Promise<Reddi
       {
         params: { limit },
         headers: {
-          'User-Agent': 'SwingAI/1.0 (trading dashboard)',
+          'User-Agent': 'Stakd/1.0 (trading dashboard)',
         },
         timeout: 6000,
       }

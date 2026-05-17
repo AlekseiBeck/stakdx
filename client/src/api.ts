@@ -226,3 +226,86 @@ export async function unsubscribeFromNotifications(endpoint: string): Promise<vo
   });
   if (!res.ok) throw new Error('Failed to unsubscribe');
 }
+
+export async function fetchLivePrices(tickers: string[]): Promise<Record<string, number>> {
+  if (tickers.length === 0) return {};
+  const params = new URLSearchParams({ tickers: tickers.join(',') });
+  const data = await get(`/prices?${params.toString()}`);
+  return data.prices ?? {};
+}
+
+export type NewsAPIArticle = { title: string; source: string; publishedAt: string };
+export type NewsAPIResult = { query: string; articles: NewsAPIArticle[] };
+
+export async function fetchChatContext(positionTickers: string[]): Promise<{
+  candleSummaries: Record<string, string>;
+  tickerNews: Record<string, string[]>;
+  newsAPIArticles: NewsAPIResult[];
+}> {
+  const params = new URLSearchParams({ tickers: positionTickers.join(',') });
+  const data = await get(`/chat/context?${params.toString()}`);
+  return {
+    candleSummaries: data.candleSummaries ?? {},
+    tickerNews: data.tickerNews ?? {},
+    newsAPIArticles: data.newsAPIArticles ?? [],
+  };
+}
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+export async function chatStream(
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  context: {
+    positions: Position[];
+    scanResults: TradeRecommendation[];
+    news: NewsItem[];
+    prices: Record<string, number>;
+    candleSummaries: Record<string, string>;
+    tickerNews: Record<string, string[]>;
+    newsAPIArticles: NewsAPIResult[];
+  },
+  onChunk: (text: string) => void
+): Promise<void> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const response = await fetch(`${BASE}/chat/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ messages, context }),
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(`Chat stream failed: ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const payload = JSON.parse(line.slice(6));
+          if (payload.text) onChunk(payload.text);
+          if (payload.done) return;
+          if (payload.error) throw new Error(payload.error);
+        } catch {
+          // Skip malformed lines
+        }
+      }
+    }
+  }
+}

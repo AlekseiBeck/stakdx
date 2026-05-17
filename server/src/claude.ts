@@ -582,6 +582,131 @@ Return ONLY valid JSON (no markdown):
 }`;
 }
 
+// ─── Chat types ──────────────────────────────────────────────────────────────
+
+export type ChatMessage = { role: 'user' | 'assistant'; content: string };
+export type NewsAPIArticle = { title: string; source: string; publishedAt: string };
+export type NewsAPIResult = { query: string; articles: NewsAPIArticle[] };
+
+export type ChatContext = {
+  positions: Position[];
+  scanResults: TradeRecommendation[];
+  news: NewsItem[];
+  prices: Record<string, number>;
+  candleSummaries: Record<string, string>;
+  tickerNews: Record<string, string[]>;  // ticker → recent headlines
+  newsAPIArticles: NewsAPIResult[];
+};
+
+// ─── Chat: streaming assistant ────────────────────────────────────────────────
+
+function buildChatSystemPrompt(ctx: ChatContext): string {
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+
+  const posSection = ctx.positions.length > 0
+    ? `OPEN POSITIONS (${ctx.positions.length}):\n${ctx.positions.map(p => {
+        const cur = ctx.prices[p.ticker.toUpperCase()];
+        const pnlPct = cur != null
+          ? (((cur - p.entryPrice) / p.entryPrice) * 100 * (p.direction === 'short' ? -1 : 1))
+          : null;
+        return `• ${p.ticker.toUpperCase()} ${p.direction.toUpperCase()} @ $${p.entryPrice.toFixed(2)}` +
+          (cur != null ? ` | Now $${cur.toFixed(2)} (${pnlPct! >= 0 ? '+' : ''}${pnlPct!.toFixed(2)}%)` : ' | No live price') +
+          (p.stopLoss ? ` | Stop $${p.stopLoss.toFixed(2)}` : '') +
+          (p.target ? ` | Target $${p.target.toFixed(2)}` : '');
+      }).join('\n')}`
+    : 'OPEN POSITIONS: None.';
+
+  const scanSection = ctx.scanResults.length > 0
+    ? `LATEST SCAN (${ctx.scanResults.length} setups):\n${ctx.scanResults.slice(0, 15).map(r =>
+        `• ${r.ticker} ${r.direction} ${r.confidence}% conf — Entry ${r.entryZone} | Stop ${r.stopLoss} | Target ${r.target} | ${r.pattern}`
+      ).join('\n')}`
+    : 'LATEST SCAN: No scan run yet.';
+
+  const newsSection = ctx.news.length > 0
+    ? `MARKET NEWS (last 24h):\n${ctx.news.slice(0, 20).map(n => `• ${n.headline}`).join('\n')}`
+    : 'MARKET NEWS: None available.';
+
+  const tickerNewsSection = ctx.tickerNews && Object.keys(ctx.tickerNews).length > 0
+    ? `COMPANY NEWS (last 72h, your positions):\n${
+        Object.entries(ctx.tickerNews)
+          .map(([ticker, headlines]) => `${ticker}: ${headlines.slice(0, 3).join(' | ')}`)
+          .join('\n')
+      }`
+    : '';
+
+  const newsAPISection = ctx.newsAPIArticles && ctx.newsAPIArticles.length > 0
+    ? `BROADER NEWS (NewsAPI.org — 80k sources, 7-day lookback):\n${
+        ctx.newsAPIArticles.map(r =>
+          `[${r.query}]:\n${r.articles.map(a => `  • ${a.title} — ${a.source} (${a.publishedAt.slice(0, 10)})`).join('\n')}`
+        ).join('\n')
+      }`
+    : '';
+
+  const candleEntries = Object.entries(ctx.candleSummaries);
+  const marketTickers = ['SPY', 'QQQ', 'SOXX', 'SMH', 'VGT'];
+  const marketCandles = candleEntries.filter(([t]) => marketTickers.includes(t));
+  const positionCandles = candleEntries.filter(([t]) => !marketTickers.includes(t));
+
+  const candleSection = candleEntries.length > 0
+    ? [
+        marketCandles.length > 0
+          ? `MARKET / SECTOR (5-day daily candles):\n${marketCandles.map(([, s]) => s).join('\n')}`
+          : '',
+        positionCandles.length > 0
+          ? `POSITION TICKERS (5-day daily candles):\n${positionCandles.map(([, s]) => s).join('\n')}`
+          : '',
+      ].filter(Boolean).join('\n\n')
+    : '';
+
+  return `You are Stakd's AI trading assistant — sharp, direct, and data-driven. Today is ${today}.
+
+You help swing traders analyze setups, manage positions, and understand market conditions. You have access to the user's live data below.
+
+${posSection}
+
+${scanSection}
+
+${newsSection}
+
+${tickerNewsSection}
+
+${newsAPISection}
+
+${candleSection}
+
+STYLE RULES:
+- Be concise and specific. Reference the actual data when relevant.
+- Use bullet points for multiple items. Bold key numbers/tickers with **text**.
+- One financial disclaimer max per response, only if truly warranted. Never repeat generic warnings.
+- Traders want signal, not noise.`;
+}
+
+export async function* streamChat(
+  messages: ChatMessage[],
+  ctx: ChatContext
+): AsyncGenerator<string> {
+  if (!hasAnthropicKey()) {
+    yield "I'm running in demo mode — add your ANTHROPIC_API_KEY to enable live AI chat.";
+    return;
+  }
+
+  const client = getClient();
+  const stream = client.messages.stream({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 4096,
+    system: buildChatSystemPrompt(ctx),
+    messages: messages.map(m => ({ role: m.role, content: m.content })),
+  });
+
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+      yield event.delta.text;
+    }
+  }
+}
+
 export async function analyzePositionWithClaude(
   position: Position,
   candles: Candle[],

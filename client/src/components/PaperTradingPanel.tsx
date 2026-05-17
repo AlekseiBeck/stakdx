@@ -97,9 +97,9 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
   const todayPL = equity - portfolioValue;
 
   return (
-    <div className="bg-[#0d1424] border border-[#16213a] rounded-2xl overflow-hidden">
+    <div className="bg-[#141415] border border-[#222225] rounded-2xl overflow-hidden">
       {/* Panel header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-[#16213a]">
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-[#222225]">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
           <h3 className="text-sm font-bold text-white">Paper Account</h3>
@@ -108,7 +108,7 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
           <button
             onClick={load}
             disabled={loading}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-400 hover:bg-[#16213a] transition-all"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-400 hover:bg-[#1e1e20] transition-all"
             title="Refresh"
           >
             <svg className={`w-4 h-4 ${loading ? 'spin-slow' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -118,7 +118,7 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
           {onClose && (
             <button
               onClick={onClose}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-400 hover:bg-[#16213a] transition-all"
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-400 hover:bg-[#1e1e20] transition-all"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -140,19 +140,19 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
           <div>
             <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-2">Account Summary</div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-[#0a0e1a] rounded-lg px-3 py-2.5">
+              <div className="bg-[#111112] rounded-lg px-3 py-2.5">
                 <div className="text-[10px] text-gray-600 mb-0.5">Equity</div>
                 <div className="mono text-sm font-bold text-white">{fmtDollar(account.equity)}</div>
               </div>
-              <div className="bg-[#0a0e1a] rounded-lg px-3 py-2.5">
+              <div className="bg-[#111112] rounded-lg px-3 py-2.5">
                 <div className="text-[10px] text-gray-600 mb-0.5">Cash</div>
                 <div className="mono text-sm font-bold text-white">{fmtDollar(account.cash)}</div>
               </div>
-              <div className="bg-[#0a0e1a] rounded-lg px-3 py-2.5">
+              <div className="bg-[#111112] rounded-lg px-3 py-2.5">
                 <div className="text-[10px] text-gray-600 mb-0.5">Buying Power</div>
-                <div className="mono text-sm font-bold text-cyan-400">{fmtDollar(account.buying_power)}</div>
+                <div className="mono text-sm font-bold text-amber-400">{fmtDollar(account.buying_power)}</div>
               </div>
-              <div className="bg-[#0a0e1a] rounded-lg px-3 py-2.5">
+              <div className="bg-[#111112] rounded-lg px-3 py-2.5">
                 <div className="text-[10px] text-gray-600 mb-0.5">Today P&L</div>
                 <div className={`mono text-sm font-bold ${todayPL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                   {todayPL >= 0 ? '+' : ''}${Math.abs(todayPL).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -177,7 +177,7 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
                 const isLong = pos.side === 'long';
                 const pl = parseFloat(pos.unrealized_pl);
                 return (
-                  <div key={pos.symbol} className="bg-[#0a0e1a] rounded-lg px-3 py-2.5 border border-[#16213a]">
+                  <div key={pos.symbol} className="bg-[#111112] rounded-lg px-3 py-2.5 border border-[#222225]">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <span className="mono font-bold text-white text-sm">{pos.symbol}</span>
@@ -216,7 +216,7 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
                   minute: '2-digit',
                 });
                 return (
-                  <div key={order.id} className="bg-[#0a0e1a] rounded-lg px-3 py-2 border border-[#16213a]">
+                  <div key={order.id} className="bg-[#111112] rounded-lg px-3 py-2 border border-[#222225]">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="mono font-bold text-white text-sm">{order.symbol}</span>

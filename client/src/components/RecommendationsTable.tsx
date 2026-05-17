@@ -65,7 +65,7 @@ export default function RecommendationsTable({
   if (isStreaming && recommendations.length === 0) {
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm text-blue-400">
+        <div className="flex items-center gap-2 text-sm text-amber-500">
           <svg className="w-4 h-4 spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
@@ -79,7 +79,7 @@ export default function RecommendationsTable({
   if (!isStreaming && recommendations.length === 0) {
     return (
       <div className="card p-12 text-center">
-        <div className="w-16 h-16 rounded-full bg-[#161f36] flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 rounded-full bg-[#1e1e20] flex items-center justify-center mx-auto mb-4">
           <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
           </svg>
@@ -94,7 +94,7 @@ export default function RecommendationsTable({
     <div className="space-y-3">
       {/* Streaming status */}
       {isStreaming && (
-        <div className="flex items-center gap-2 text-sm text-blue-400">
+        <div className="flex items-center gap-2 text-sm text-amber-500">
           <svg className="w-4 h-4 spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
@@ -110,7 +110,7 @@ export default function RecommendationsTable({
             const colorMap = {
               LONG: 'border-emerald-600 text-emerald-400 bg-emerald-900/40',
               SHORT: 'border-red-600 text-red-400 bg-red-900/40',
-              CALL: 'border-blue-600 text-blue-400 bg-blue-900/40',
+              CALL: 'border-amber-600 text-amber-400 bg-amber-900/40',
               PUT: 'border-purple-600 text-purple-400 bg-purple-900/40',
             };
             const count = recommendations.filter(r => r.direction === d).length;
@@ -122,7 +122,7 @@ export default function RecommendationsTable({
                 className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
                   dirFilter.has(d)
                     ? colorMap[d]
-                    : 'border-[#16213a] text-gray-600 hover:text-gray-400'
+                    : 'border-[#222225] text-gray-600 hover:text-gray-400'
                 }`}
               >
                 {d} <span className="opacity-60 font-normal">{count}</span>

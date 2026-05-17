@@ -35,16 +35,16 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.03)_1px,transparent_1px)] bg-[size:64px_64px]" />
+    <div className="min-h-screen bg-[#0c0c0d] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none" />
       <div className="relative w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <div className="w-14 h-14 rounded-2xl bg-amber-500 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white">SwingAI</h1>
+          <h1 className="text-2xl font-bold text-white">Stakd</h1>
         </div>
 
         <div className="card p-6 shadow-2xl shadow-black/50">
@@ -68,13 +68,13 @@ export default function ResetPasswordPage() {
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">New Password</label>
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••" required minLength={6}
-                  className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-600" />
+                  className="w-full bg-[#141415] border border-[#222225] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-600" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">Confirm Password</label>
                 <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
                   placeholder="••••••••" required minLength={6}
-                  className="w-full bg-[#141d35] border border-[#1a2442] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-600" />
+                  className="w-full bg-[#141415] border border-[#222225] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-600" />
               </div>
               {error && (
                 <div className="flex items-center gap-2 text-sm text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">

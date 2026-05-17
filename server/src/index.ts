@@ -7,6 +7,8 @@ import {
   fetchNews,
   fetchNewsForTicker,
   fetchLatestPrices,
+  fetchPricesForTickers,
+  summarizeCandles,
   fetchMarketNews,
   scoreTicker,
   scoreTickerForMode,
@@ -22,8 +24,11 @@ import {
   analyzePositionWithClaude,
   classifyMacroRegime,
   scoreNewsImpact,
+  streamChat,
 } from './claude';
 import { fetchFinnhubNews, fetchUpcomingEarnings, fetchEconomicCalendar } from './finnhub';
+import { searchNews } from './newsapi';
+import type { NewsAPIResult } from './newsapi';
 import { fetchRedditSentiment } from './reddit';
 import { MOCK_RECOMMENDATIONS, MOCK_NEWS, MOCK_POSITION_UPDATE } from './mockData';
 import { requireAuth, AuthRequest } from './auth';
@@ -311,6 +316,15 @@ app.get('/api/news', requireAuth, async (_req, res) => {
   }
 });
 
+// ─── GET /api/prices — live prices for specific tickers ──────────────────────
+app.get('/api/prices', requireAuth, async (req: AuthRequest, res) => {
+  const tickersParam = req.query.tickers as string | undefined;
+  if (!tickersParam) return res.status(400).json({ error: 'tickers query param required' });
+  const tickers = tickersParam.split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
+  const prices = await fetchPricesForTickers(tickers);
+  return res.json({ prices });
+});
+
 // ─── GET /api/positions ───────────────────────────────────────────────────────
 app.get('/api/positions', requireAuth, async (req: AuthRequest, res) => {
   const userId = req.userId!;
@@ -539,6 +553,117 @@ app.delete('/api/brokerage/order/:orderId', requireAuth, async (req: AuthRequest
   } catch { return res.status(400).json({ error: 'Failed to cancel order' }); }
 });
 
+// ─── GET /api/chat/context — candle summaries for chat context ───────────────
+// Always includes SPY, QQQ, SOXX, SMH, VGT for macro/sector awareness.
+// Caller passes additional tickers (position tickers) to enrich.
+const MARKET_CONTEXT_TICKERS = ['SPY', 'QQQ', 'SOXX', 'SMH', 'VGT'];
+
+app.get('/api/chat/context', requireAuth, async (req: AuthRequest, res) => {
+  const tickersParam = req.query.tickers as string | undefined;
+  const positionTickers = tickersParam
+    ? tickersParam.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
+    : [];
+
+  const allCancleTickers = [...new Set([...MARKET_CONTEXT_TICKERS, ...positionTickers])];
+
+  // Fixed NewsAPI macro queries + per-position ticker queries (up to 3)
+  const NEWSAPI_FIXED = [
+    'semiconductor chip tariff trade',
+    'Federal Reserve interest rates market',
+  ];
+  const tickerQueries = positionTickers.slice(0, 3);
+  const newsAPIQueries = [...NEWSAPI_FIXED, ...tickerQueries];
+
+  // Fetch candles + Finnhub news + NewsAPI in parallel
+  const [candleResults, finnhubResults, newsAPIResults] = await Promise.all([
+    Promise.all(
+      allCancleTickers.map(ticker =>
+        fetchCandlesForTicker(ticker)
+          .then(candles => ({ ticker, candles }))
+          .catch(() => ({ ticker, candles: null }))
+      )
+    ),
+    positionTickers.length > 0
+      ? fetchFinnhubNews(positionTickers).catch(() => [])
+      : Promise.resolve([]),
+    Promise.all(
+      newsAPIQueries.map(query =>
+        searchNews(query, 5)
+          .then(articles => ({ query, articles }))
+          .catch(() => ({ query, articles: [] }))
+      )
+    ),
+  ]);
+
+  const candleSummaries: Record<string, string> = {};
+  for (const { ticker, candles } of candleResults) {
+    if (candles && candles.length > 0) {
+      candleSummaries[ticker] = summarizeCandles(ticker, candles);
+    }
+  }
+
+  // Group Finnhub news headlines by ticker
+  const tickerNews: Record<string, string[]> = {};
+  for (const item of finnhubResults) {
+    if (!tickerNews[item.ticker]) tickerNews[item.ticker] = [];
+    if (tickerNews[item.ticker].length < 5) tickerNews[item.ticker].push(item.headline);
+  }
+
+  const newsAPIArticles: NewsAPIResult[] = newsAPIResults.filter(r => r.articles.length > 0);
+
+  return res.json({ candleSummaries, tickerNews, newsAPIArticles });
+});
+
+// ─── Chat: streaming AI assistant ────────────────────────────────────────────
+
+app.post('/api/chat/stream', requireAuth, async (req: AuthRequest, res) => {
+  const { messages, context } = req.body as {
+    messages?: { role: 'user' | 'assistant'; content: string }[];
+    context?: {
+      positions?: unknown[];
+      scanResults?: unknown[];
+      news?: unknown[];
+      prices?: Record<string, number>;
+      candleSummaries?: Record<string, string>;
+      tickerNews?: Record<string, string[]>;
+      newsAPIArticles?: NewsAPIResult[];
+    };
+  };
+
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ error: 'messages array required' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (data: object) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  try {
+    const ctx = {
+      positions: (context?.positions ?? []) as import('./types').Position[],
+      scanResults: (context?.scanResults ?? []) as import('./types').TradeRecommendation[],
+      news: (context?.news ?? []) as import('./types').NewsItem[],
+      prices: (context?.prices ?? {}) as Record<string, number>,
+      candleSummaries: (context?.candleSummaries ?? {}) as Record<string, string>,
+      tickerNews: (context?.tickerNews ?? {}) as Record<string, string[]>,
+      newsAPIArticles: (context?.newsAPIArticles ?? []) as NewsAPIResult[],
+    };
+
+    for await (const chunk of streamChat(messages, ctx)) {
+      sendEvent({ text: chunk });
+    }
+    sendEvent({ done: true });
+  } catch (err) {
+    console.error('[chat/stream] Error:', err);
+    sendEvent({ error: 'Chat failed' });
+  }
+
+  res.end();
+});
+
 // ─── Price Monitor: stop/target push alerts ───────────────────────────────────
 // Runs every 2 minutes during US market hours (9:30am–4:00pm ET Mon–Fri).
 // Checks all tracked positions with stop_loss or target set.
@@ -586,7 +711,7 @@ async function runPriceAlertCheck(): Promise<void> {
         if (hitStop) {
           console.log(`[alerts] ${pos.ticker} hit stop loss $${pos.stopLoss} (current: $${price})`);
           await sendToUser(subs, {
-            title: `SwingAI: ${pos.ticker} hit stop loss`,
+            title: `Stakd: ${pos.ticker} hit stop loss`,
             body: `${pos.ticker} is at $${price.toFixed(2)} — stop loss of $${pos.stopLoss.toFixed(2)} triggered. Consider closing your ${pos.direction} position.`,
             tag: `stop-${pos.id}`,
           }, deleteExpiredPushSubscription);
@@ -603,7 +728,7 @@ async function runPriceAlertCheck(): Promise<void> {
         if (hitTarget) {
           console.log(`[alerts] ${pos.ticker} hit target $${pos.target} (current: $${price})`);
           await sendToUser(subs, {
-            title: `SwingAI: ${pos.ticker} hit target`,
+            title: `Stakd: ${pos.ticker} hit target`,
             body: `${pos.ticker} reached $${price.toFixed(2)} — target of $${pos.target.toFixed(2)} achieved! Consider taking profit on your ${pos.direction} position.`,
             tag: `target-${pos.id}`,
           }, deleteExpiredPushSubscription);
@@ -629,4 +754,5 @@ app.listen(PORT, () => {
   console.log(`Supabase: ${hasDatabase() ? 'SET' : 'NOT SET (using in-memory fallback)'}`);
   console.log(`Encryption key: ${process.env.ENCRYPTION_KEY ? 'SET' : 'NOT SET'}`);
   console.log(`VAPID keys: ${hasVapidKeys() ? 'SET (push notifications active)' : 'NOT SET (push disabled)'}`);
+  console.log(`NewsAPI key: ${process.env.NEWSAPI_KEY ? 'SET' : 'NOT SET'}`);
 });

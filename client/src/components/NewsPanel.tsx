@@ -18,8 +18,8 @@ export default function NewsPanel({ news }: Props) {
   if (news.length === 0) {
     return (
       <div className="card">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#16213a]">
-          <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#222225]">
+          <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5" />
           </svg>
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Market News</span>
@@ -31,29 +31,29 @@ export default function NewsPanel({ news }: Props) {
 
   return (
     <div className="card overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#16213a]">
-        <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#222225]">
+        <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5" />
         </svg>
         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Market News</span>
         <span className="text-xs text-gray-600 ml-auto">{news.length} stories</span>
       </div>
 
-      <div className="divide-y divide-[#16213a]/60 max-h-[400px] overflow-y-auto">
+      <div className="divide-y divide-[#222225]/60 max-h-[400px] overflow-y-auto">
         {news.slice(0, 20).map((item) => (
           <a
             key={item.id}
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block px-4 py-3 hover:bg-[#111928] transition-colors group"
+            className="block px-4 py-3 hover:bg-[#1a1a1c] transition-colors group"
           >
             <div className="flex items-start gap-2">
               <div className="flex-1 min-w-0">
                 {item.symbols.length > 0 && (
                   <div className="flex items-center gap-1 mb-1 flex-wrap">
                     {item.symbols.slice(0, 4).map((s) => (
-                      <span key={s} className="mono text-[9px] font-bold text-blue-400 bg-blue-950/50 px-1.5 py-0.5 rounded border border-blue-900/50">
+                      <span key={s} className="mono text-[9px] font-bold text-gray-400 bg-[#222225] px-1.5 py-0.5 rounded border border-[#333336]">
                         {s}
                       </span>
                     ))}

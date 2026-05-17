@@ -3,6 +3,7 @@ import Header from './components/Header';
 import RecommendationsTable from './components/RecommendationsTable';
 import PositionsPanel from './components/PositionsPanel';
 import NewsPanel from './components/NewsPanel';
+import ChatPanel from './components/ChatPanel';
 import AddPositionModal from './components/AddPositionModal';
 import ConnectBrokerageModal from './components/ConnectBrokerageModal';
 import PaperTradingPanel from './components/PaperTradingPanel';
@@ -10,10 +11,9 @@ import AuthPage from './pages/AuthPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import { useAuth } from './AuthContext';
 import { TradeRecommendation, NewsItem, Position, ScanMode, BrokerageStatus, AlpacaPosition } from './types';
-import { scanStream, runScan, fetchNews, addPosition, fetchPositions, getBrokerageStatus, getBrokeragePositions } from './api';
-import { SP500_TICKERS } from './constants';
+import { scanStream, runScan, fetchNews, addPosition, fetchPositions, getBrokerageStatus, getBrokeragePositions, fetchLivePrices, fetchChatContext, NewsAPIResult } from './api';
 
-type MobileTab = 'scan' | 'positions' | 'news';
+type SidePanel = 'scan' | 'positions' | 'news';
 
 export default function App() {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -23,8 +23,8 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#070b14] flex items-center justify-center">
-        <svg className="w-8 h-8 text-blue-500 spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <div className="min-h-screen bg-[#0c0c0d] flex items-center justify-center">
+        <svg className="w-8 h-8 text-amber-500 spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
       </div>
@@ -38,46 +38,62 @@ export default function App() {
 }
 
 function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userEmail: string }) {
+  // ── data ────────────────────────────────────────────────────────────────────
   const [recommendations, setRecommendations] = useState<TradeRecommendation[]>([]);
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [news, setNews] = useState<NewsItem[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [paperPositions, setPaperPositions] = useState<AlpacaPosition[]>([]);
+  const [brokerageStatus, setBrokerageStatus] = useState<BrokerageStatus>({ connected: false });
+  const [candleSummaries, setCandleSummaries] = useState<Record<string, string>>({});
+  const [tickerNews, setTickerNews] = useState<Record<string, string[]>>({});
+  const [newsAPIArticles, setNewsAPIArticles] = useState<NewsAPIResult[]>([]);
+
+  // ── scan ────────────────────────────────────────────────────────────────────
   const [isScanning, setIsScanning] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamPhase, setStreamPhase] = useState<'idle' | 'batch1' | 'batch2' | 'done'>('idle');
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [isMockData, setIsMockData] = useState(false);
   const [scanError, setScanError] = useState('');
+  const [mode, setMode] = useState<ScanMode>('both');
+  const [buyingPower, setBuyingPower] = useState('');
+
+  // ── UI ──────────────────────────────────────────────────────────────────────
+  const [sidebarPanel, setSidebarPanel] = useState<SidePanel>('scan');
+  const [mobileDrawer, setMobileDrawer] = useState<SidePanel | null>(null);
   const [addPositionPrefill, setAddPositionPrefill] = useState<TradeRecommendation | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [buyingPower, setBuyingPower] = useState<string>('');
-  const [mode, setMode] = useState<ScanMode>('both');
-  const [mobileTab, setMobileTab] = useState<MobileTab>('scan');
-  const [brokerageStatus, setBrokerageStatus] = useState<BrokerageStatus>({ connected: false });
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [showPaperPanel, setShowPaperPanel] = useState(false);
-  const [paperPositions, setPaperPositions] = useState<AlpacaPosition[]>([]);
-  const [desktopTab, setDesktopTab] = useState<'scan' | 'positions' | 'news'>('scan');
 
+  // ── effects ─────────────────────────────────────────────────────────────────
   const loadNews = useCallback(async () => {
-    try {
-      const result = await fetchNews();
-      setNews(result.news);
-    } catch {}
+    try { const r = await fetchNews(); setNews(r.news); } catch {}
   }, []);
 
   const loadPositions = useCallback(async () => {
     try {
       const posData = await fetchPositions();
       setPositions(posData);
+      const tickers = posData.map(p => p.ticker.toUpperCase());
+      // Fetch live prices + candle context in parallel
+      const [livePrices, ctx] = await Promise.all([
+        tickers.length > 0 ? fetchLivePrices(tickers) : Promise.resolve({}),
+        fetchChatContext(tickers),
+      ]);
+      if (tickers.length > 0) setPrices(prev => ({ ...prev, ...livePrices }));
+      setCandleSummaries(ctx.candleSummaries);
+      setTickerNews(ctx.tickerNews);
+      setNewsAPIArticles(ctx.newsAPIArticles);
     } catch {}
   }, []);
 
   useEffect(() => {
     loadNews();
     loadPositions();
-    const interval = setInterval(loadNews, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    const iv = setInterval(loadNews, 5 * 60 * 1000);
+    return () => clearInterval(iv);
   }, [loadNews, loadPositions]);
 
   const loadBrokerageData = useCallback(async () => {
@@ -85,18 +101,19 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
       const status = await getBrokerageStatus();
       setBrokerageStatus(status);
       if (status.connected) {
-        const { positions } = await getBrokeragePositions();
-        setPaperPositions(positions);
+        const { positions: p } = await getBrokeragePositions();
+        setPaperPositions(p);
       }
     } catch {}
   }, []);
 
   useEffect(() => {
     loadBrokerageData();
-    const interval = setInterval(loadBrokerageData, 30 * 1000);
-    return () => clearInterval(interval);
-  }, [loadBrokerageData]);
+    const iv = setInterval(() => { loadBrokerageData(); loadPositions(); }, 30 * 1000);
+    return () => clearInterval(iv);
+  }, [loadBrokerageData, loadPositions]);
 
+  // ── handlers ────────────────────────────────────────────────────────────────
   const handleScan = async () => {
     setIsScanning(true);
     setIsStreaming(true);
@@ -105,25 +122,21 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     setRecommendations([]);
     setPrices({});
     setIsMockData(false);
+    setSidebarPanel('scan');
+    setMobileDrawer('scan');
 
     const bp = buyingPower ? parseFloat(buyingPower.replace(/,/g, '')) : undefined;
-
-    // Build focus directions from mode
     const directions: string[] = [];
     if (mode === 'long') directions.push('LONG', 'CALL');
     if (mode === 'short') directions.push('SHORT', 'PUT');
 
     try {
-      await scanStream(
-        bp,
-        mode,
-        directions,
+      await scanStream(bp, mode, directions,
         (batchRecs) => {
-          setRecommendations((prev) => {
-            // Merge, deduplicate by ticker
+          setRecommendations(prev => {
             const seen = new Set(prev.map(r => r.ticker));
-            const newRecs = batchRecs.filter(r => !seen.has(r.ticker));
-            return [...prev, ...newRecs].sort((a, b) => b.confidence - a.confidence);
+            return [...prev, ...batchRecs.filter(r => !seen.has(r.ticker))]
+              .sort((a, b) => b.confidence - a.confidence);
           });
           setStreamPhase('batch2');
           setLastScanTime(new Date());
@@ -135,9 +148,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
           setIsScanning(false);
         }
       );
-    } catch (streamErr) {
-      // Fallback to regular scan if SSE fails
-      console.warn('SSE scan failed, falling back to regular scan:', streamErr);
+    } catch {
       try {
         const result = await runScan(bp, directions, mode);
         setRecommendations(result.recommendations);
@@ -154,9 +165,12 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     }
   };
 
-  const handleAddPosition = async (ticker: string, entryPrice: number, direction: 'long' | 'short', stopLoss?: number, target?: number) => {
+  const handleAddPosition = async (
+    ticker: string, entryPrice: number, direction: 'long' | 'short',
+    stopLoss?: number, target?: number
+  ) => {
     const newPos = await addPosition(ticker, entryPrice, direction, stopLoss, target);
-    setPositions((prev) => [...prev, newPos]);
+    setPositions(prev => [...prev, newPos]);
   };
 
   const handleOpenAddModal = (rec?: TradeRecommendation) => {
@@ -165,10 +179,78 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   };
 
   const handleCloseModal = () => { setShowAddModal(false); setAddPositionPrefill(null); };
-  const handlePositionClosed = (id: string) => setPositions((prev) => prev.filter((p) => p.id !== id));
+  const handlePositionClosed = (id: string) => setPositions(prev => prev.filter(p => p.id !== id));
+
+  const onTradeExecuted = (rec: TradeRecommendation, price: number) => {
+    const stop = parseFloat(rec.stopLoss.replace(/[^0-9.]/g, '')) || undefined;
+    const target = parseFloat(rec.target.replace(/[^0-9.]/g, '')) || undefined;
+    const dir = rec.direction === 'LONG' || rec.direction === 'CALL' ? 'long' : 'short';
+    handleAddPosition(rec.ticker, price, dir, stop, target);
+    loadBrokerageData();
+  };
+
+  // ── panel content ────────────────────────────────────────────────────────────
+  const scanContent = (
+    <div className="space-y-3">
+      {scanError && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-red-950/30 border border-red-900/40 rounded-xl text-sm text-red-400">
+          <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+          </svg>
+          {scanError}
+        </div>
+      )}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-bold text-white">
+            Scan Results
+            {recommendations.length > 0 && (
+              <span className="text-xs font-normal text-gray-500 ml-2">{recommendations.length} setups</span>
+            )}
+          </h2>
+          <p className="text-[11px] text-gray-600 mt-0.5">
+            {mode === 'both' ? 'All directions' : mode === 'long' ? 'Long / Call bias' : 'Short / Put bias'} · 1–3 day holds
+          </p>
+        </div>
+        {isMockData && recommendations.length > 0 && (
+          <span className="text-xs text-amber-400 bg-amber-950/30 border border-amber-900/40 px-2.5 py-1 rounded-lg">Demo</span>
+        )}
+      </div>
+      <RecommendationsTable
+        recommendations={recommendations}
+        prices={prices}
+        onAddPosition={handleOpenAddModal}
+        isStreaming={isStreaming}
+        streamPhase={streamPhase}
+        brokerageConnected={brokerageStatus.connected}
+        onTradeExecuted={onTradeExecuted}
+      />
+    </div>
+  );
+
+  const positionsContent = (
+    <PositionsPanel
+      positions={positions}
+      paperPositions={paperPositions}
+      onPositionClosed={handlePositionClosed}
+      onAddClick={() => handleOpenAddModal()}
+    />
+  );
+
+  const panelContent = (panel: SidePanel) => {
+    if (panel === 'scan') return scanContent;
+    if (panel === 'positions') return positionsContent;
+    return <NewsPanel news={news} />;
+  };
+
+  const pillBadge = (tab: SidePanel) => {
+    if (tab === 'scan') return recommendations.length;
+    if (tab === 'positions') return positions.length + paperPositions.length;
+    return news.length;
+  };
 
   return (
-    <div className="min-h-screen bg-[#070b14]">
+    <div className="h-screen flex flex-col bg-[#0c0c0d] overflow-hidden">
       <Header
         lastScanTime={lastScanTime}
         isMockData={isMockData}
@@ -185,213 +267,103 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
         onOpenPaperPanel={() => setShowPaperPanel(true)}
       />
 
-      {/* Error banner */}
-      {scanError && (
-        <div className="max-w-[1600px] mx-auto px-4 lg:px-6 pt-4">
-          <div className="flex items-center gap-3 px-4 py-3 bg-red-950/30 border border-red-900/40 rounded-xl text-sm text-red-400">
-            <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-            </svg>
-            {scanError}
+      {/* ── Desktop (≥1024px): chat left + sidebar right ─────────────────────── */}
+      <div className="hidden lg:flex flex-1 overflow-hidden">
+        {/* Chat */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden border-r border-[#222225]">
+          <ChatPanel positions={positions} scanResults={recommendations} news={news} prices={prices} candleSummaries={candleSummaries} tickerNews={tickerNews} newsAPIArticles={newsAPIArticles} />
+        </div>
+
+        {/* Right sidebar */}
+        <div className="w-[440px] flex-shrink-0 flex flex-col overflow-hidden">
+          {/* Pill tabs */}
+          <div className="flex items-center gap-1.5 px-4 py-3 border-b border-[#222225] flex-shrink-0">
+            {(['scan', 'positions', 'news'] as SidePanel[]).map((tab) => {
+              const badge = pillBadge(tab);
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setSidebarPanel(tab)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                    sidebarPanel === tab
+                      ? 'bg-amber-500 text-black'
+                      : 'bg-[#141415] border border-[#222225] text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {badge > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 rounded-full ${
+                      sidebarPanel === tab ? 'bg-black/20 text-black' : 'bg-[#222225] text-gray-600'
+                    }`}>{badge}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {/* Panel content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {panelContent(sidebarPanel)}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Desktop layout (>=1024px): tabbed */}
-      <div className="hidden lg:block max-w-[1600px] mx-auto px-6 pt-4">
-        {/* Tab bar */}
-        <div className="flex items-center gap-1 border-b border-[#16213a] mb-6">
-          {([
-            { key: 'scan' as const, label: 'Scan Results', icon: (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
-              </svg>
-            ), badge: recommendations.length > 0 ? recommendations.length : null },
-            { key: 'positions' as const, label: 'Positions', icon: (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25" />
-              </svg>
-            ), badge: (positions.length + paperPositions.length) > 0 ? positions.length + paperPositions.length : null },
-            { key: 'news' as const, label: 'News', icon: (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25" />
-              </svg>
-            ), badge: news.length > 0 ? news.length : null },
-          ]).map(({ key, label, icon, badge }) => (
-            <button
-              key={key}
-              onClick={() => setDesktopTab(key)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
-                desktopTab === key
-                  ? 'text-white border-blue-500'
-                  : 'text-gray-500 border-transparent hover:text-gray-300'
-              }`}
-            >
-              {icon}
-              {label}
-              {badge !== null && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  desktopTab === key ? 'bg-blue-600 text-white' : 'bg-[#1a2442] text-gray-500'
-                }`}>
-                  {badge}
-                </span>
-              )}
-            </button>
-          ))}
+      {/* ── Mobile (<1024px): chat + bottom drawer ───────────────────────────── */}
+      <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+        {/* Pill row */}
+        <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[#222225] flex-shrink-0">
+          {(['scan', 'positions', 'news'] as SidePanel[]).map((tab) => {
+            const badge = pillBadge(tab);
+            return (
+              <button
+                key={tab}
+                onClick={() => setMobileDrawer(mobileDrawer === tab ? null : tab)}
+                className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                  mobileDrawer === tab
+                    ? 'bg-amber-500 text-black'
+                    : 'bg-[#141415] border border-[#222225] text-gray-500'
+                }`}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {badge > 0 && (
+                  <span className={`text-[9px] font-bold px-1 rounded-full ${
+                    mobileDrawer === tab ? 'bg-black/20 text-black' : 'bg-[#222225] text-gray-600'
+                  }`}>{badge}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Tab content */}
-        <main className="pb-8">
-          {desktopTab === 'scan' && (
-            <div className="space-y-3 max-w-4xl">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-white">
-                    Scan Results
-                    {recommendations.length > 0 && (
-                      <span className="text-sm font-normal text-gray-500 ml-2">{recommendations.length} setups</span>
-                    )}
-                  </h2>
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    AI-powered swing analysis · {mode === 'both' ? 'All directions' : mode === 'long' ? 'Long / Call bias' : 'Short / Put bias'} · 1-3 day holds
-                  </p>
-                </div>
-                {isMockData && recommendations.length > 0 && (
-                  <span className="flex items-center gap-1.5 text-xs text-amber-400 bg-amber-950/30 border border-amber-900/40 px-2.5 py-1.5 rounded-lg">
-                    Demo data
-                  </span>
-                )}
-              </div>
-              <RecommendationsTable
-                recommendations={recommendations}
-                prices={prices}
-                onAddPosition={(rec) => handleOpenAddModal(rec)}
-                isStreaming={isStreaming}
-                streamPhase={streamPhase}
-                brokerageConnected={brokerageStatus.connected}
-                onTradeExecuted={(rec, price) => {
-                  const stop = parseFloat(rec.stopLoss.replace(/[^0-9.]/g, '')) || undefined;
-                  const target = parseFloat(rec.target.replace(/[^0-9.]/g, '')) || undefined;
-                  const dir = rec.direction === 'LONG' || rec.direction === 'CALL' ? 'long' : 'short';
-                  handleAddPosition(rec.ticker, price, dir, stop, target);
-                  loadBrokerageData();
-                  if (showPaperPanel) { setShowPaperPanel(false); setTimeout(() => setShowPaperPanel(true), 50); }
-                }}
-              />
-            </div>
-          )}
+        {/* Chat fills remaining */}
+        <div className="flex-1 relative overflow-hidden">
+          <ChatPanel positions={positions} scanResults={recommendations} news={news} prices={prices} candleSummaries={candleSummaries} tickerNews={tickerNews} newsAPIArticles={newsAPIArticles} />
 
-          {desktopTab === 'positions' && (
-            <div className="max-w-2xl">
-              <PositionsPanel
-                positions={positions}
-                paperPositions={paperPositions}
-                onPositionClosed={handlePositionClosed}
-                onAddClick={() => handleOpenAddModal()}
-              />
-            </div>
-          )}
-
-          {desktopTab === 'news' && (
-            <div className="max-w-2xl">
-              <NewsPanel news={news} />
-            </div>
-          )}
-        </main>
-      </div>
-
-      {/* Mobile layout (<1024px): tab navigation */}
-      <div className="lg:hidden">
-        <main className="pb-28 px-4 pt-4">
-          {mobileTab === 'scan' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-white">
-                  Scan Results
-                  {recommendations.length > 0 && (
-                    <span className="text-xs font-normal text-gray-500 ml-2">{recommendations.length}</span>
-                  )}
-                </h2>
-                {/* Mobile buying power input */}
-                <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-600 mono text-xs">$</span>
-                  <input
-                    type="text"
-                    value={buyingPower}
-                    onChange={(e) => setBuyingPower(e.target.value.replace(/[^0-9.,]/g, ''))}
-                    placeholder="BP"
-                    className="w-24 bg-[#0d1424] border border-[#16213a] rounded-lg pl-5 pr-2 py-1.5 text-white mono text-xs focus:outline-none focus:border-blue-600 placeholder-gray-700"
-                  />
-                </div>
-              </div>
-              <RecommendationsTable
-                recommendations={recommendations}
-                prices={prices}
-                onAddPosition={(rec) => handleOpenAddModal(rec)}
-                isStreaming={isStreaming}
-                streamPhase={streamPhase}
-                brokerageConnected={brokerageStatus.connected}
-                onTradeExecuted={(rec, price) => {
-                  const stop = parseFloat(rec.stopLoss.replace(/[^0-9.]/g, '')) || undefined;
-                  const target = parseFloat(rec.target.replace(/[^0-9.]/g, '')) || undefined;
-                  const dir = rec.direction === 'LONG' || rec.direction === 'CALL' ? 'long' : 'short';
-                  handleAddPosition(rec.ticker, price, dir, stop, target);
-                  loadBrokerageData();
-                }}
-              />
-            </div>
-          )}
-
-          {mobileTab === 'positions' && (
-            <PositionsPanel
-              positions={positions}
-              paperPositions={paperPositions}
-              onPositionClosed={handlePositionClosed}
-              onAddClick={() => handleOpenAddModal()}
-            />
-          )}
-
-          {mobileTab === 'news' && <NewsPanel news={news} />}
-        </main>
-
-        {/* Mobile bottom tab bar */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-[#0d1424] border-t border-[#16213a] flex items-stretch z-50 safe-bottom">
-          {([
-            { key: 'scan' as MobileTab, label: 'Scan', icon: (
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
-              </svg>
-            )},
-            { key: 'positions' as MobileTab, label: 'Positions', icon: (
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25" />
-              </svg>
-            )},
-            { key: 'news' as MobileTab, label: 'News', icon: (
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25" />
-              </svg>
-            )},
-          ]).map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => { setMobileTab(key); setShowPaperPanel(false); }}
-              className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
-                mobileTab === key ? 'text-blue-400' : 'text-gray-600'
-              }`}
+          {/* Bottom drawer */}
+          {mobileDrawer && (
+            <div
+              className="absolute inset-x-0 bottom-0 flex flex-col bg-[#111112] border-t border-[#222225] z-20 shadow-2xl"
+              style={{ height: '72%' }}
             >
-              {icon}
-              {label}
-              {key === 'positions' && positions.length > 0 && (
-                <span className="absolute top-2 right-1/2 translate-x-3 bg-blue-600 text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
-                  {positions.length}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#222225] flex-shrink-0">
+                <span className="text-sm font-bold text-white capitalize">{mobileDrawer}</span>
+                <button
+                  onClick={() => setMobileDrawer(null)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 safe-bottom">
+                {panelContent(mobileDrawer)}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* ── Modals ──────────────────────────────────────────────────────────── */}
       {showAddModal && (
         <AddPositionModal
           prefill={addPositionPrefill}
@@ -403,19 +375,16 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
       <ConnectBrokerageModal
         isOpen={showConnectModal}
         onClose={() => setShowConnectModal(false)}
-        onConnected={() => {
-          setShowConnectModal(false);
-          loadBrokerageData();
-        }}
+        onConnected={() => { setShowConnectModal(false); loadBrokerageData(); }}
       />
 
       {showPaperPanel && (
-        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-20 sm:pb-0 pt-20 sm:pt-0" onClick={() => setShowPaperPanel(false)}>
-          <div className="w-full max-w-xl max-h-[75vh] sm:max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <PaperTradingPanel
-              visible={showPaperPanel}
-              onClose={() => setShowPaperPanel(false)}
-            />
+        <div
+          className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-4 sm:pb-0 pt-20 sm:pt-0"
+          onClick={() => setShowPaperPanel(false)}
+        >
+          <div className="w-full max-w-xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <PaperTradingPanel visible={showPaperPanel} onClose={() => setShowPaperPanel(false)} />
           </div>
         </div>
       )}
