@@ -107,7 +107,7 @@
   }
 
   .mode-pill-btn {
-    @apply px-2.5 sm:px-4 py-1.5 rounded-md text-xs font-bold tracking-wider transition-all duration-150 cursor-pointer select-none;
+    @apply px-1.5 sm:px-4 py-1.5 rounded-md text-xs font-bold tracking-wider transition-all duration-150 cursor-pointer select-none;
   }
 
   .mode-pill-btn-inactive {
