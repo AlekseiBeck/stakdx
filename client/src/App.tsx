@@ -269,13 +269,13 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
 
       {/* ── Desktop (≥1024px): chat left + sidebar right ─────────────────────── */}
       <div className="hidden lg:flex flex-1 overflow-hidden">
-        {/* Chat */}
-        <div className="flex-1 min-w-0 flex flex-col overflow-hidden border-r border-[#222225]">
+        {/* Chat — 2/3 */}
+        <div className="flex-[2] min-w-0 flex flex-col overflow-hidden border-r border-[#222225]">
           <ChatPanel positions={positions} scanResults={recommendations} news={news} prices={prices} candleSummaries={candleSummaries} tickerNews={tickerNews} newsAPIArticles={newsAPIArticles} />
         </div>
 
-        {/* Right sidebar */}
-        <div className="w-[440px] flex-shrink-0 flex flex-col overflow-hidden">
+        {/* Right sidebar — 1/3 */}
+        <div className="flex-[1] min-w-0 flex flex-col overflow-hidden">
           {/* Pill tabs */}
           <div className="flex items-center gap-1.5 px-4 py-3 border-b border-[#222225] flex-shrink-0">
             {(['scan', 'positions', 'news'] as SidePanel[]).map((tab) => {
