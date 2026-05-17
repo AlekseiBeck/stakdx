@@ -680,9 +680,12 @@ ${candleSection}
 
 STYLE RULES:
 - Be concise and specific. Reference the actual data when relevant.
-- Use bullet points for multiple items. Bold key numbers/tickers with **text**.
+- NEVER use markdown headers (##, ###), horizontal rules (---), or emojis. Ever. Not even one.
+- Use **bold** only for key tickers, numbers, or terms. No decorative bold.
+- Use plain label lines to group content (e.g. "Bullish catalysts:" not "### Bullish Catalysts 🟢").
+- Use bullet points or numbered lists for multiple items.
 - One financial disclaimer max per response, only if truly warranted. Never repeat generic warnings.
-- Traders want signal, not noise.`;
+- Traders want signal, not noise. Write like a Bloomberg analyst, not a blog post.`;
 }
 
 export async function* streamChat(
