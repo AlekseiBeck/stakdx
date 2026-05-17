@@ -356,14 +356,15 @@ export async function chatStream(
 
     for (const line of lines) {
       if (line.startsWith('data: ')) {
+        let payload: { text?: string; done?: boolean; error?: string };
         try {
-          const payload = JSON.parse(line.slice(6));
-          if (payload.text) onChunk(payload.text);
-          if (payload.done) return;
-          if (payload.error) throw new Error(payload.error);
+          payload = JSON.parse(line.slice(6));
         } catch {
-          // Skip malformed lines
+          continue; // skip malformed JSON
         }
+        if (payload.text) onChunk(payload.text);
+        if (payload.done) return;
+        if (payload.error) throw new Error(payload.error);
       }
     }
   }

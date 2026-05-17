@@ -142,7 +142,9 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     }
 
     try {
-      const history = [...messages, userMsg].map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+      const history = [...messages, userMsg]
+        .filter(m => m.id !== 'welcome')
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
       let finalContent = '';
       await chatStream(history, { positions, scanResults, news, prices, candleSummaries, tickerNews, newsAPIArticles }, (chunk) => {
         finalContent += chunk;
