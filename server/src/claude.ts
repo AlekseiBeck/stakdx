@@ -662,6 +662,8 @@ function buildChatSystemPrompt(ctx: ChatContext): string {
 
   return `You are Stakd's AI trading assistant — sharp, direct, and data-driven. Today is ${today}.
 
+You have live web search available. Use it proactively when asked about recent news, macro events, earnings, tariffs, Fed decisions, or anything that may have happened after the data below was fetched. If the answer isn't clearly in the data, search before responding.
+
 You help swing traders analyze setups, manage positions, and understand market conditions. You have access to the user's live data below.
 
 ${posSection}
@@ -693,18 +695,50 @@ export async function* streamChat(
   }
 
   const client = getClient();
-  const stream = client.messages.stream({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    system: buildChatSystemPrompt(ctx),
-    messages: messages.map(m => ({ role: m.role, content: m.content })),
-  });
+  const systemPrompt = buildChatSystemPrompt(ctx);
 
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      yield event.delta.text;
+  // Agentic loop: Claude may call the web_search tool 1-3× before producing a final answer.
+  // Each iteration is non-streaming; the final text is yielded in one chunk once ready.
+  // This lets Claude fetch live news (tariff deals, earnings beats, etc.) the static feed missed.
+  let currentMessages: any[] = messages.map(m => ({ role: m.role, content: m.content }));
+
+  for (let iter = 0; iter < 4; iter++) {
+    const response = await (client.messages.create as Function)({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      system: systemPrompt,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      messages: currentMessages,
+    });
+
+    // Not a tool call → final answer
+    if (response.stop_reason !== 'tool_use') {
+      for (const block of response.content as any[]) {
+        if (block.type === 'text') yield block.text;
+      }
+      return;
     }
+
+    // Web search was invoked — update history and loop
+    const toolUseBlocks = (response.content as any[]).filter(b => b.type === 'tool_use');
+    const searchResultBlocks = (response.content as any[]).filter(
+      b => b.type === 'web_search_result_20250305'
+    );
+
+    currentMessages.push({ role: 'assistant', content: response.content });
+
+    const toolResults = toolUseBlocks.map((tb: any) => ({
+      type: 'tool_result',
+      tool_use_id: tb.id,
+      content: searchResultBlocks.length > 0
+        ? searchResultBlocks
+        : [{ type: 'text', text: 'No results found.' }],
+    }));
+
+    currentMessages.push({ role: 'user', content: toolResults });
   }
+
+  yield "I searched the web but couldn't complete my response. Please try again.";
 }
 
 export async function analyzePositionWithClaude(

@@ -568,8 +568,10 @@ app.get('/api/chat/context', requireAuth, async (req: AuthRequest, res) => {
 
   // Fixed NewsAPI macro queries + per-position ticker queries (up to 3)
   const NEWSAPI_FIXED = [
-    'semiconductor chip tariff trade',
-    'Federal Reserve interest rates market',
+    'US China trade tariff deal',
+    'semiconductor chip stock market',
+    'Federal Reserve interest rates',
+    'stock market rally earnings',
   ];
   const tickerQueries = positionTickers.slice(0, 3);
   const newsAPIQueries = [...NEWSAPI_FIXED, ...tickerQueries];
