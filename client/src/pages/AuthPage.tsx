@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 type Mode = 'landing' | 'login' | 'signup' | 'forgot';
 
 function StakdxLogo({ size = 'h-8' }: { size?: string }) {
-  return <img src="/icons/icon-192.png" className={`${size} w-auto rounded-lg`} alt="" />;
+  return <img src="/stakd-logo.png" className={`${size} w-auto rounded-lg`} alt="" />;
 }
 
 const FEATURES = [
