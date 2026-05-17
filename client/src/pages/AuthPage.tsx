@@ -55,8 +55,12 @@ export default function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+        // Supabase returns a user object even for existing emails, but identities is empty
+        if (!data.user || data.user.identities?.length === 0) {
+          throw new Error('This email is already registered. Sign in instead.');
+        }
         setMode('verify');
         setPassword('');
       } else if (mode === 'forgot') {
