@@ -47,6 +47,12 @@ import {
   deletePushSubscription,
   deleteExpiredPushSubscription,
   getPushSubscriptionsForUser,
+  listChatSessions,
+  createChatSession,
+  updateChatSessionTitle,
+  deleteChatSession,
+  getChatMessages,
+  appendChatMessages,
 } from './db';
 import { Position, MacroRegime, ScoredNewsItem, NewsItem, Candle } from './types';
 import type { EarningsEvent, EconomicEvent } from './finnhub';
@@ -664,6 +670,59 @@ app.post('/api/chat/stream', requireAuth, async (req: AuthRequest, res) => {
   }
 
   res.end();
+});
+
+// ─── Chat Session routes ──────────────────────────────────────────────────────
+
+// GET /api/chat/sessions — list sessions for the user
+app.get('/api/chat/sessions', requireAuth, async (req: AuthRequest, res) => {
+  if (!hasDatabase()) return res.json({ sessions: [] });
+  const sessions = await listChatSessions(req.userId!);
+  return res.json({ sessions });
+});
+
+// POST /api/chat/sessions — create a new session
+app.post('/api/chat/sessions', requireAuth, async (req: AuthRequest, res) => {
+  if (!hasDatabase()) return res.status(503).json({ error: 'Database not configured' });
+  const { title = 'New Chat' } = req.body as { title?: string };
+  try {
+    const session = await createChatSession(req.userId!, title.slice(0, 100));
+    return res.status(201).json({ session });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
+// PATCH /api/chat/sessions/:id — rename session
+app.patch('/api/chat/sessions/:id', requireAuth, async (req: AuthRequest, res) => {
+  if (!hasDatabase()) return res.status(503).json({ error: 'Database not configured' });
+  const { title } = req.body as { title?: string };
+  if (!title) return res.status(400).json({ error: 'title required' });
+  await updateChatSessionTitle(req.userId!, req.params.id, title.slice(0, 100));
+  return res.json({ success: true });
+});
+
+// DELETE /api/chat/sessions/:id — delete session + messages
+app.delete('/api/chat/sessions/:id', requireAuth, async (req: AuthRequest, res) => {
+  if (!hasDatabase()) return res.status(503).json({ error: 'Database not configured' });
+  await deleteChatSession(req.userId!, req.params.id);
+  return res.json({ success: true });
+});
+
+// GET /api/chat/sessions/:id/messages — load messages for a session
+app.get('/api/chat/sessions/:id/messages', requireAuth, async (req: AuthRequest, res) => {
+  if (!hasDatabase()) return res.json({ messages: [] });
+  const messages = await getChatMessages(req.userId!, req.params.id);
+  return res.json({ messages });
+});
+
+// POST /api/chat/sessions/:id/messages — append messages to a session
+app.post('/api/chat/sessions/:id/messages', requireAuth, async (req: AuthRequest, res) => {
+  if (!hasDatabase()) return res.status(503).json({ error: 'Database not configured' });
+  const { messages } = req.body as { messages?: Array<{ role: 'user' | 'assistant'; content: string }> };
+  if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages array required' });
+  await appendChatMessages(req.userId!, req.params.id, messages);
+  return res.json({ success: true });
 });
 
 // ─── Price Monitor: stop/target push alerts ───────────────────────────────────

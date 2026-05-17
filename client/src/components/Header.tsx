@@ -87,7 +87,7 @@ export default function Header({
       <div className="hidden lg:flex max-w-[1600px] mx-auto px-6 py-3 items-center gap-4">
         {/* Logo */}
         <div className="flex items-center gap-2 flex-shrink-0 pr-2 border-r border-[#222225]">
-          <img src="/stakd-logo.png" className="h-6 w-auto rounded-md" alt="" />
+          <img src="/icons/icon-192.png" className="h-6 w-auto rounded-md" alt="" />
           <span className="text-base font-bold tracking-tight text-white">Stakdx</span>
         </div>
         <div className="flex-shrink-0"><ModeSwitcher mode={mode} onChange={onModeChange} /></div>
@@ -166,7 +166,7 @@ export default function Header({
         {/* Row 1: logo + mode switcher + market status + sign out */}
         <div className="flex items-center gap-2 px-3 pt-2 pb-2">
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <img src="/stakd-logo.png" className="h-5 w-auto rounded-md" alt="" />
+            <img src="/icons/icon-192.png" className="h-5 w-auto rounded-md" alt="" />
             <span className="text-sm font-bold tracking-tight text-white">Stakdx</span>
           </div>
           <div className="flex-1 min-w-0">

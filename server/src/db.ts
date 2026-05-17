@@ -239,3 +239,105 @@ export async function getAllPushSubscriptions(): Promise<
   const { data } = await db.from('push_subscriptions').select('*');
   return (data ?? []) as Array<StoredPushSubscription & { user_id: string }>;
 }
+
+// ─── Chat Sessions ────────────────────────────────────────────────────────────
+
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
+export async function listChatSessions(userId: string): Promise<ChatSession[]> {
+  const db = getClient();
+  if (!db) return [];
+  const { data, error } = await db
+    .from('chat_sessions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+    .limit(50);
+  if (error) { console.error('DB listChatSessions error:', error); return []; }
+  return (data ?? []) as ChatSession[];
+}
+
+export async function createChatSession(userId: string, title: string): Promise<ChatSession> {
+  const db = getClient()!;
+  const { data, error } = await db
+    .from('chat_sessions')
+    .insert({ user_id: userId, title })
+    .select()
+    .single();
+  if (error) throw new Error(`DB createChatSession error: ${error.message}`);
+  return data as ChatSession;
+}
+
+export async function updateChatSessionTitle(userId: string, sessionId: string, title: string): Promise<void> {
+  const db = getClient();
+  if (!db) return;
+  await db
+    .from('chat_sessions')
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq('id', sessionId)
+    .eq('user_id', userId);
+}
+
+export async function deleteChatSession(userId: string, sessionId: string): Promise<void> {
+  const db = getClient();
+  if (!db) return;
+  // Messages are deleted via ON DELETE CASCADE
+  await db
+    .from('chat_sessions')
+    .delete()
+    .eq('id', sessionId)
+    .eq('user_id', userId);
+}
+
+export async function getChatMessages(userId: string, sessionId: string): Promise<ChatMessage[]> {
+  const db = getClient();
+  if (!db) return [];
+  // Verify ownership first
+  const { data: session } = await db
+    .from('chat_sessions')
+    .select('id')
+    .eq('id', sessionId)
+    .eq('user_id', userId)
+    .single();
+  if (!session) return [];
+
+  const { data, error } = await db
+    .from('chat_messages')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+  if (error) { console.error('DB getChatMessages error:', error); return []; }
+  return (data ?? []) as ChatMessage[];
+}
+
+export async function appendChatMessages(
+  userId: string,
+  sessionId: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>
+): Promise<void> {
+  const db = getClient();
+  if (!db) return;
+  const rows = messages.map(m => ({ session_id: sessionId, role: m.role, content: m.content }));
+  const { error } = await db.from('chat_messages').insert(rows);
+  if (error) { console.error('DB appendChatMessages error:', error); return; }
+  // Bump session updated_at
+  await db
+    .from('chat_sessions')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', sessionId)
+    .eq('user_id', userId);
+}

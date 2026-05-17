@@ -251,6 +251,65 @@ export async function fetchChatContext(positionTickers: string[]): Promise<{
   };
 }
 
+// ─── Chat Sessions ────────────────────────────────────────────────────────────
+
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoredMessage {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
+export async function listChatSessions(): Promise<ChatSession[]> {
+  try {
+    const data = await get('/chat/sessions');
+    return data.sessions ?? [];
+  } catch { return []; }
+}
+
+export async function createChatSession(title: string): Promise<ChatSession> {
+  const data = await post('/chat/sessions', { title });
+  return data.session;
+}
+
+export async function renameChatSession(id: string, title: string): Promise<void> {
+  const headers = await authHeaders();
+  await fetch(`${BASE}/chat/sessions/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export async function deleteChatSession(id: string): Promise<void> {
+  await del(`/chat/sessions/${id}`);
+}
+
+export async function loadSessionMessages(sessionId: string): Promise<StoredMessage[]> {
+  try {
+    const data = await get(`/chat/sessions/${sessionId}/messages`);
+    return data.messages ?? [];
+  } catch { return []; }
+}
+
+export async function saveSessionMessages(
+  sessionId: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>
+): Promise<void> {
+  try {
+    await post(`/chat/sessions/${sessionId}/messages`, { messages });
+  } catch { /* non-fatal */ }
+}
+
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 export async function chatStream(
