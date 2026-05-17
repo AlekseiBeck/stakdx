@@ -213,7 +213,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
         w-64 h-full transition-transform duration-200 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="flex items-center justify-between px-3 py-3 border-b border-[#1e1e20]">
+        <div className="flex items-center justify-between px-3 h-12 border-b border-[#222225]">
           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">History</span>
           <button
             onClick={startNewChat}
@@ -264,7 +264,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
       {/* Main chat area */}
       <div className="flex flex-col flex-1 min-w-0 h-full">
         {/* Top bar with sidebar toggle */}
-        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b border-[#1a1a1c]">
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 h-12 border-b border-[#222225]">
           <button
             onClick={() => setSidebarOpen(o => !o)}
             className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors"

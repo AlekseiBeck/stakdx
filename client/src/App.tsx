@@ -277,7 +277,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
         {/* Right sidebar — 1/3 */}
         <div className="flex-[1] min-w-0 flex flex-col overflow-hidden">
           {/* Pill tabs */}
-          <div className="flex items-center gap-1.5 px-4 py-3 border-b border-[#222225] flex-shrink-0">
+          <div className="flex items-center gap-1.5 px-4 h-12 border-b border-[#222225] flex-shrink-0">
             {(['scan', 'positions', 'news'] as SidePanel[]).map((tab) => {
               const badge = pillBadge(tab);
               return (

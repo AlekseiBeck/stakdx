@@ -189,7 +189,7 @@ export default function Header({
           </button>
         </div>
 
-        {/* Row 2: scan button + optional brokerage/demo */}
+        {/* Row 2: scan button + buying power + optional brokerage/demo */}
         <div className="flex items-center gap-2 px-3 pb-2">
           <button
             onClick={onScan}
@@ -202,15 +202,27 @@ export default function Header({
             }
           </button>
 
+          <div className="relative flex-1 min-w-0 max-w-[160px]">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 mono text-xs pointer-events-none">$</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={buyingPower}
+              onChange={(e) => onBuyingPowerChange(e.target.value.replace(/[^0-9.,]/g, ''))}
+              placeholder="Buying power"
+              className="w-full bg-[#141415] border border-[#222225] rounded-lg pl-6 pr-2 py-2 text-white mono text-xs focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-700 min-h-[40px]"
+            />
+          </div>
+
           {brokerageConnected && (
-            <button onClick={onOpenPaperPanel} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-800/50 bg-emerald-950/30 text-emerald-400 text-xs font-semibold min-h-[40px]">
+            <button onClick={onOpenPaperPanel} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-800/50 bg-emerald-950/30 text-emerald-400 text-xs font-semibold min-h-[40px] flex-shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
               Paper
             </button>
           )}
 
           {isMockData && (
-            <span className="px-2 py-1 rounded-md bg-amber-950/50 border border-amber-800/40 text-amber-400 text-xs font-medium">Demo</span>
+            <span className="px-2 py-1 rounded-md bg-amber-950/50 border border-amber-800/40 text-amber-400 text-xs font-medium flex-shrink-0">Demo</span>
           )}
         </div>
       </div>
