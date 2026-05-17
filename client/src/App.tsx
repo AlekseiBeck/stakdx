@@ -250,7 +250,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   };
 
   return (
-    <div className="h-screen flex flex-col bg-[#0c0c0d] overflow-hidden">
+    <div className="h-full flex flex-col bg-[#0c0c0d] overflow-hidden">
       <Header
         lastScanTime={lastScanTime}
         isMockData={isMockData}

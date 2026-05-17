@@ -7,12 +7,23 @@
     box-sizing: border-box;
   }
 
+  html {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     @apply bg-[#0c0c0d] text-gray-100;
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
-    /* Prevent iOS bounce scroll on the body */
+    height: 100%;
+    overflow: hidden;
     overscroll-behavior: none;
+  }
+
+  #root {
+    height: 100%;
+    overflow: hidden;
   }
 
   /* iOS PWA safe area utilities */
