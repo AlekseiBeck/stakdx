@@ -34,3 +34,4 @@ client/env.local
 .playwright-mcp/
 /test-*.png
 /stakd-*.png
+auth-token.txt

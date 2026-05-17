@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import {
   fetchCandles,
   fetchCandlesForTicker,
@@ -79,6 +80,65 @@ app.use(express.json());
 
 // Initialize web push on startup
 initWebPush();
+
+// ─── Rate limiters ────────────────────────────────────────────────────────────
+// Keyed by userId (set by requireAuth) so a VPN change doesn't reset the counter.
+// Two-layer chat limit: burst stops scripts, hourly stops sustained abuse.
+
+function rateLimitKey(req: express.Request): string {
+  return (req as AuthRequest).userId ?? 'anon';
+}
+
+// Chat burst: 5 messages/minute — a real conversation averages ~1/min; 5/min is generous headroom
+const chatBurstLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 5,
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many messages — slow down a bit.' },
+});
+
+// Chat sustained: 40 messages/hour — more than enough for heavy real use
+const chatHourLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  max: 40,
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Hourly message limit reached. Try again later.' },
+});
+
+// Scan: 4 scans/5 minutes — each scan takes ~30s, so 4 manual scans in 5 min is already fast
+const scanLimiter = rateLimit({
+  windowMs: 5 * 60_000,
+  max: 4,
+  keyGenerator: rateLimitKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many scan requests. Wait a moment before scanning again.' },
+});
+
+// ─── Input validation helpers ─────────────────────────────────────────────────
+
+// Validates a ticker symbol: uppercase letters, digits, dots only (covers BRK.A etc.), max 10 chars
+function sanitizeTicker(raw: string): string | null {
+  const t = raw.trim().toUpperCase();
+  return /^[A-Z0-9.]{1,10}$/.test(t) ? t : null;
+}
+
+// Validates the messages array sent to the AI chat endpoint
+function isValidMessageArray(val: unknown): val is Array<{ role: 'user' | 'assistant'; content: string }> {
+  if (!Array.isArray(val) || val.length === 0 || val.length > 100) return false;
+  return val.every(m => {
+    if (m === null || typeof m !== 'object') return false;
+    const { role, content } = m as Record<string, unknown>;
+    return (role === 'user' || role === 'assistant') &&
+      typeof content === 'string' &&
+      content.length > 0 &&
+      content.length <= 20000;
+  });
+}
 
 // In-memory fallback positions store (no DB)
 const memPositions = new Map<string, Position & { userId: string }>();
@@ -233,7 +293,7 @@ app.get('/api/scan', requireAuth, async (req, res) => {
 });
 
 // ─── GET /api/scan/stream — SSE streaming ────────────────────────────────────
-app.get('/api/scan/stream', requireAuth, async (req: AuthRequest, res) => {
+app.get('/api/scan/stream', requireAuth, scanLimiter, async (req: AuthRequest, res) => {
   const buyingPower = req.query.buyingPower ? parseFloat(req.query.buyingPower as string) : null;
   const focusDirections = req.query.directions
     ? (req.query.directions as string).split(',').map(d => d.trim().toUpperCase()).filter(Boolean)
@@ -359,8 +419,18 @@ app.post('/api/positions', requireAuth, async (req: AuthRequest, res) => {
     return res.status(400).json({ error: 'ticker, entryPrice, and direction are required' });
   }
 
+  const cleanTicker = sanitizeTicker(String(ticker));
+  if (!cleanTicker) return res.status(400).json({ error: 'Invalid ticker symbol' });
+
+  if (typeof entryPrice !== 'number' || entryPrice <= 0) {
+    return res.status(400).json({ error: 'entryPrice must be a positive number' });
+  }
+  if (!['long', 'short'].includes(String(direction))) {
+    return res.status(400).json({ error: 'direction must be long or short' });
+  }
+
   const positionData: Omit<Position, 'id'> = {
-    ticker: ticker.toUpperCase(),
+    ticker: cleanTicker,
     entryPrice,
     entryTime: new Date().toISOString(),
     direction,
@@ -401,7 +471,8 @@ app.delete('/api/positions/:id', requireAuth, async (req: AuthRequest, res) => {
 // ─── GET /api/positions/:ticker/update ───────────────────────────────────────
 app.get('/api/positions/:ticker/update', requireAuth, async (req: AuthRequest, res) => {
   const userId = req.userId!;
-  const ticker = req.params.ticker.toUpperCase();
+  const ticker = sanitizeTicker(req.params.ticker);
+  if (!ticker) return res.status(400).json({ error: 'Invalid ticker symbol' });
 
   let position;
   if (hasDatabase()) {
@@ -624,9 +695,9 @@ app.get('/api/chat/context', requireAuth, async (req: AuthRequest, res) => {
 
 // ─── Chat: streaming AI assistant ────────────────────────────────────────────
 
-app.post('/api/chat/stream', requireAuth, async (req: AuthRequest, res) => {
+app.post('/api/chat/stream', requireAuth, chatBurstLimiter, chatHourLimiter, async (req: AuthRequest, res) => {
   const { messages, context } = req.body as {
-    messages?: { role: 'user' | 'assistant'; content: string }[];
+    messages?: unknown;
     context?: {
       positions?: unknown[];
       scanResults?: unknown[];
@@ -638,8 +709,8 @@ app.post('/api/chat/stream', requireAuth, async (req: AuthRequest, res) => {
     };
   };
 
-  if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: 'messages array required' });
+  if (!isValidMessageArray(messages)) {
+    return res.status(400).json({ error: 'messages must be a non-empty array of up to 100 messages, each under 20,000 characters' });
   }
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -696,8 +767,8 @@ app.post('/api/chat/sessions', requireAuth, async (req: AuthRequest, res) => {
 // PATCH /api/chat/sessions/:id — rename session
 app.patch('/api/chat/sessions/:id', requireAuth, async (req: AuthRequest, res) => {
   if (!hasDatabase()) return res.status(503).json({ error: 'Database not configured' });
-  const { title } = req.body as { title?: string };
-  if (!title) return res.status(400).json({ error: 'title required' });
+  const { title } = req.body as { title?: unknown };
+  if (!title || typeof title !== 'string') return res.status(400).json({ error: 'title must be a non-empty string' });
   await updateChatSessionTitle(req.userId!, req.params.id, title.slice(0, 100));
   return res.json({ success: true });
 });
@@ -719,8 +790,8 @@ app.get('/api/chat/sessions/:id/messages', requireAuth, async (req: AuthRequest,
 // POST /api/chat/sessions/:id/messages — append messages to a session
 app.post('/api/chat/sessions/:id/messages', requireAuth, async (req: AuthRequest, res) => {
   if (!hasDatabase()) return res.status(503).json({ error: 'Database not configured' });
-  const { messages } = req.body as { messages?: Array<{ role: 'user' | 'assistant'; content: string }> };
-  if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: 'messages array required' });
+  const { messages } = req.body as { messages?: unknown };
+  if (!isValidMessageArray(messages)) return res.status(400).json({ error: 'messages must be a valid array' });
   await appendChatMessages(req.userId!, req.params.id, messages);
   return res.json({ success: true });
 });
