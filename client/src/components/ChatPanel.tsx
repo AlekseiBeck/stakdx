@@ -123,8 +123,8 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
         <div ref={bottomRef} />
       </div>
 
-      {/* Input bar */}
-      <div className="flex-shrink-0 px-4 py-3 border-t border-[#222225]">
+      {/* Input bar — always anchored at bottom */}
+      <div className="flex-shrink-0 px-4 pt-3 pb-3 border-t border-[#222225]" style={{ paddingLeft: 'max(16px, env(safe-area-inset-left))', paddingRight: 'max(16px, env(safe-area-inset-right))' }}>
         <div className="flex items-center gap-2 bg-[#141415] border border-[#222225] rounded-xl px-3.5 py-2.5 focus-within:border-amber-500/40 transition-colors">
           <textarea
             ref={inputRef}
