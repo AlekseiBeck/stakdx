@@ -1,5 +1,5 @@
 {
-  "name": "stakd-server",
+  "name": "stakdx-server",
   "version": "1.0.0",
   "description": "AI-powered swing trading assistant backend",
   "main": "dist/index.js",

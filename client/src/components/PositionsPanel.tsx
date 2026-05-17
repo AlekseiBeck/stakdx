@@ -224,7 +224,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
               <div>
                 <p className="text-sm font-semibold text-amber-300">Enable Stop/Target Alerts on iPhone</p>
                 <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
-                  To receive push notifications, install Stakd on your Home Screen:
+                  To receive push notifications, install Stakdx on your Home Screen:
                 </p>
                 <ol className="text-xs text-gray-500 mt-1.5 space-y-0.5 leading-relaxed">
                   <li>1. Tap the <strong className="text-amber-300">Share</strong> button in Safari (
@@ -233,7 +233,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
                     </svg>
                   )</li>
                   <li>2. Scroll down and tap <strong className="text-amber-300">"Add to Home Screen"</strong></li>
-                  <li>3. Open Stakd from your Home Screen and enable alerts here</li>
+                  <li>3. Open Stakdx from your Home Screen and enable alerts here</li>
                 </ol>
                 <p className="text-[10px] text-gray-600 mt-1.5">Requires iOS 16.4 or later · Safari only</p>
               </div>

@@ -1,7 +1,7 @@
-// Stakd Service Worker
+// Stakdx Service Worker
 // Handles push notifications for iOS (16.4+, requires PWA install) and Android
 
-const CACHE_NAME = 'stakd-v1';
+const CACHE_NAME = 'stakdx-v1';
 
 // ─── Install & activate ───────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
@@ -23,14 +23,14 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: 'Stakd Alert', body: event.data.text() };
+    payload = { title: 'Stakdx Alert', body: event.data.text() };
   }
 
   const options = {
     body: payload.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-72.png',
-    tag: payload.tag || 'stakd-alert',
+    tag: payload.tag || 'stakdx-alert',
     // iOS ignores: vibrate, actions, requireInteraction
     // Keep it simple for cross-platform compatibility
     data: {
@@ -39,7 +39,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'Stakd', options)
+    self.registration.showNotification(payload.title || 'Stakdx', options)
   );
 });
 

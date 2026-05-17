@@ -3,7 +3,7 @@ import { supabase } from '../supabase';
 
 type Mode = 'landing' | 'login' | 'signup' | 'forgot';
 
-function StakdLogo({ size = 'h-8' }: { size?: string }) {
+function StakdxLogo({ size = 'h-8' }: { size?: string }) {
   return <img src="/stakd-logo.png" className={`${size} w-auto rounded-lg`} alt="" />;
 }
 
@@ -83,8 +83,8 @@ export default function AuthPage() {
         {/* Nav */}
         <nav className="relative flex items-center justify-between px-6 py-4 border-b border-[#1a1a1c]">
           <div className="flex items-center gap-2">
-            <StakdLogo size="h-6" />
-            <span className="text-lg font-bold tracking-tight text-white">Stakd</span>
+            <StakdxLogo size="h-6" />
+            <span className="text-lg font-bold tracking-tight text-white">Stakdx</span>
           </div>
           <button
             onClick={() => reset('login')}
@@ -97,7 +97,7 @@ export default function AuthPage() {
         {/* Hero */}
         <div className="relative flex-1 flex flex-col items-center justify-center px-6 py-16 text-center">
           <div className="mb-6">
-            <StakdLogo size="h-14" />
+            <StakdxLogo size="h-14" />
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight mb-4 max-w-xl">
             Trade with an<br /><span className="text-amber-500">edge.</span>
@@ -143,8 +143,8 @@ export default function AuthPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-1">
-            <StakdLogo size="h-8" />
-            <h1 className="text-2xl font-bold text-white">Stakd</h1>
+            <StakdxLogo size="h-8" />
+            <h1 className="text-2xl font-bold text-white">Stakdx</h1>
           </div>
           <p className="text-gray-600 text-sm mt-1">
             {mode === 'forgot' ? 'Reset your password' : 'Welcome back'}

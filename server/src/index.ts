@@ -713,7 +713,7 @@ async function runPriceAlertCheck(): Promise<void> {
         if (hitStop) {
           console.log(`[alerts] ${pos.ticker} hit stop loss $${pos.stopLoss} (current: $${price})`);
           await sendToUser(subs, {
-            title: `Stakd: ${pos.ticker} hit stop loss`,
+            title: `Stakdx: ${pos.ticker} hit stop loss`,
             body: `${pos.ticker} is at $${price.toFixed(2)} — stop loss of $${pos.stopLoss.toFixed(2)} triggered. Consider closing your ${pos.direction} position.`,
             tag: `stop-${pos.id}`,
           }, deleteExpiredPushSubscription);
@@ -730,7 +730,7 @@ async function runPriceAlertCheck(): Promise<void> {
         if (hitTarget) {
           console.log(`[alerts] ${pos.ticker} hit target $${pos.target} (current: $${price})`);
           await sendToUser(subs, {
-            title: `Stakd: ${pos.ticker} hit target`,
+            title: `Stakdx: ${pos.ticker} hit target`,
             body: `${pos.ticker} reached $${price.toFixed(2)} — target of $${pos.target.toFixed(2)} achieved! Consider taking profit on your ${pos.direction} position.`,
             tag: `target-${pos.id}`,
           }, deleteExpiredPushSubscription);

@@ -21,7 +21,7 @@ interface ChatPanelProps {
 const WELCOME: Message = {
   id: 'welcome',
   role: 'assistant',
-  content: "Hey! I'm your Stakd AI. Ask me about scan results, your positions, or any setup you're watching.",
+  content: "Hey! I'm your Stakdx AI. Ask me about scan results, your positions, or any setup you're watching.",
 };
 
 function renderContent(content: string) {

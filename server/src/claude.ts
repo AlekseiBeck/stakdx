@@ -660,7 +660,7 @@ function buildChatSystemPrompt(ctx: ChatContext): string {
       ].filter(Boolean).join('\n\n')
     : '';
 
-  return `You are Stakd's AI trading assistant — sharp, direct, and data-driven. Today is ${today}.
+  return `You are Stakdx's AI trading assistant — sharp, direct, and data-driven. Today is ${today}.
 
 You have live web search available. Use it proactively when asked about recent news, macro events, earnings, tariffs, Fed decisions, or anything that may have happened after the data below was fetched. If the answer isn't clearly in the data, search before responding.
 
