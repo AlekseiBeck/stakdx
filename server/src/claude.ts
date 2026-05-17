@@ -27,7 +27,10 @@ function hasAnthropicKey(): boolean {
 }
 
 function getClient(): Anthropic {
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    defaultHeaders: { 'anthropic-beta': 'prompt-caching-2024-07-31' },
+  });
 }
 
 // ─── Layer 1: Macro Regime Classifier (Claude Haiku) ────────────────────────
@@ -287,15 +290,17 @@ function buildIntradaySection(intradayData: Record<string, Candle[]>): string {
   return `\nINTRADAY CONTEXT (1h bars, last 2 trading days):\n${lines.join('\n')}\n`;
 }
 
-function buildScanPrompt(buyingPower: number | null): string {
-  const hasBP = buyingPower && buyingPower > 0;
-
-  const bpSection = hasBP
-    ? `\nBUYING POWER & SIZING:\n- Available capital to deploy per trade: $${buyingPower!.toLocaleString()}\n- shares = floor($${buyingPower!.toLocaleString()} / entryPrice) — size the position to use the full buying power\n- maxRisk = shares × (entryPrice − stopLoss) — report actual dollar risk\n- potentialGain = shares × (target − entryPrice)\n- Return exact share counts in positionSize (e.g. "59 shares"), maxRisk and potentialGain in dollars.\n`
-    : `\nSIZING: No buying power given. Use "size to risk $200" as positionSize.\n`;
-
+function buildScanPrompt(): string {
   return `You are a senior professional swing trader with 20 years of experience at a top-tier hedge fund. You combine rigorous technical analysis, macro awareness, news catalysts, and social sentiment to surface the highest-conviction setups available right now.
-${bpSection}
+
+BUYING POWER & SIZING:
+- Buying power is stated in the analysis request ("Buying power: $X"). Use that exact amount.
+- shares = floor(buying_power / entryPrice) — size the position to deploy the full buying power
+- maxRisk = shares × (entryPrice − stopLoss) — report actual dollar risk
+- potentialGain = shares × (target − entryPrice)
+- Return exact share counts in positionSize (e.g. "59 shares"), maxRisk and potentialGain in dollars.
+- If no buying power is stated: use "size to risk $200" as positionSize.
+
 ━━━ HOW TO READ THE DATA ━━━
 Each stock block contains:
 1. WEEKLY (3 bars): Establishes the multi-week trend direction
@@ -444,7 +449,7 @@ export async function analyzeCandlesWithClaude(
   if (!hasAnthropicKey()) return null;
 
   const client = getClient();
-  const systemPrompt = buildScanPrompt(buyingPower);
+  const cachedSystem = [{ type: 'text' as const, text: buildScanPrompt(), cache_control: { type: 'ephemeral' as const } }];
   const analysisDate = new Date().toISOString().split('T')[0];
   const focusSection = focusDirections.length > 0
     ? `\nSCAN FOCUS (STRICT): Return ONLY setups where direction ∈ {${focusDirections.join(', ')}}. No exceptions. Be thorough — return every qualifying setup within allowed types.\n`
@@ -463,14 +468,14 @@ export async function analyzeCandlesWithClaude(
       client.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
-        system: systemPrompt,
+        system: cachedSystem,
         messages: [{ role: 'user', content: makeMsg(entries.slice(0, mid)) }],
       }),
       entries.slice(mid).length > 0
         ? client.messages.create({
             model: 'claude-sonnet-4-6',
             max_tokens: 8192,
-            system: systemPrompt,
+            system: cachedSystem,
             messages: [{ role: 'user', content: makeMsg(entries.slice(mid)) }],
           })
         : Promise.resolve(null),
@@ -532,7 +537,7 @@ export async function analyzeBatchWithClaude(
     const msg = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
-      system: buildScanPrompt(buyingPower),
+      system: [{ type: 'text', text: buildScanPrompt(), cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userMsg }],
     });
 
@@ -625,7 +630,7 @@ function buildChatSystemPrompt(ctx: ChatContext): string {
     : 'LATEST SCAN: No scan run yet.';
 
   const newsSection = ctx.news.length > 0
-    ? `MARKET NEWS (last 24h):\n${ctx.news.slice(0, 20).map(n => `• ${n.headline}`).join('\n')}`
+    ? `MARKET NEWS (last 24h):\n${ctx.news.slice(0, 10).map(n => `• ${n.headline}`).join('\n')}`
     : 'MARKET NEWS: None available.';
 
   const tickerNewsSection = ctx.tickerNews && Object.keys(ctx.tickerNews).length > 0
@@ -639,7 +644,7 @@ function buildChatSystemPrompt(ctx: ChatContext): string {
   const newsAPISection = ctx.newsAPIArticles && ctx.newsAPIArticles.length > 0
     ? `BROADER NEWS (NewsAPI.org — 80k sources, 7-day lookback):\n${
         ctx.newsAPIArticles.map(r =>
-          `[${r.query}]:\n${r.articles.map(a => `  • ${a.title} — ${a.source} (${a.publishedAt.slice(0, 10)})`).join('\n')}`
+          `[${r.query}]:\n${r.articles.slice(0, 3).map(a => `  • ${a.title} — ${a.source} (${a.publishedAt.slice(0, 10)})`).join('\n')}`
         ).join('\n')
       }`
     : '';
@@ -703,7 +708,23 @@ export async function* streamChat(
   // Agentic loop: Claude may call the web_search tool 1-3× before producing a final answer.
   // Each iteration is non-streaming; the final text is yielded in one chunk once ready.
   // This lets Claude fetch live news (tariff deals, earnings beats, etc.) the static feed missed.
-  let currentMessages: any[] = messages.map(m => ({ role: m.role, content: m.content }));
+
+  // Keep only the last 12 messages (6 turns) to cap context growth in long sessions.
+  const recentMessages = messages.slice(-12);
+  let currentMessages: any[] = recentMessages.map(m => ({ role: m.role, content: m.content }));
+
+  // Cache all conversation history except the latest user message — each new turn only
+  // pays for the new exchange; prior turns hit the cache at 0.1× token cost.
+  if (currentMessages.length >= 2) {
+    const idx = currentMessages.length - 2;
+    const prev = currentMessages[idx];
+    if (typeof prev.content === 'string') {
+      currentMessages[idx] = {
+        ...prev,
+        content: [{ type: 'text', text: prev.content, cache_control: { type: 'ephemeral' } }],
+      };
+    }
+  }
 
   for (let iter = 0; iter < 4; iter++) {
     const response = await (client.messages.create as Function)({
