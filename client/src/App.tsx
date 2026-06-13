@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChatCircleDots, RadioButton, Briefcase, Newspaper, CircleNotch } from '@phosphor-icons/react';
+import { ChatCircleDots, RadioButton, Briefcase, Newspaper, CircleNotch, CaretLeft, CaretRight } from '@phosphor-icons/react';
 import Header from './components/Header';
 import RecommendationsTable from './components/RecommendationsTable';
 import PositionsPanel from './components/PositionsPanel';
@@ -59,7 +59,8 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const [buyingPower, setBuyingPower] = useState('');
 
   // ── UI ──────────────────────────────────────────────────────────────────────
-  const [sidebarPanel, setSidebarPanel] = useState<SidePanel>('scan');
+  const [sidebarPanel, setSidebarPanel] = useState<SidePanel>('news');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<'chat' | SidePanel>('chat');
   const [addPositionPrefill, setAddPositionPrefill] = useState<TradeRecommendation | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -268,40 +269,89 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
 
       {/* ── Desktop (≥1024px): chat left + sidebar right ─────────────────────── */}
       <div className="hidden lg:flex flex-1 overflow-hidden">
-        {/* Chat — 2/3 */}
-        <div className="flex-[2] min-w-0 flex flex-col overflow-hidden border-r border-[#222225]">
+        {/* Chat — grows to fill whatever the right panel doesn't use */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden border-r border-[#222225]">
           <ChatPanel positions={positions} scanResults={recommendations} news={news} prices={prices} candleSummaries={candleSummaries} tickerNews={tickerNews} newsAPIArticles={newsAPIArticles} />
         </div>
 
-        {/* Right sidebar — 1/3 */}
-        <div className="flex-[1] min-w-0 flex flex-col overflow-hidden">
-          {/* Pill tabs */}
-          <div className="flex items-center gap-1.5 px-4 h-12 border-b border-[#222225] flex-shrink-0">
-            {(['scan', 'positions', 'news'] as SidePanel[]).map((tab) => {
-              const badge = pillBadge(tab);
+        {/* Right sidebar — collapsible, width-animated to mirror the chat-history collapse.
+            The full panel stays mounted at a fixed width so it clips/slides instead of
+            reflowing; the icon rail cross-fades in over the left edge when collapsed. */}
+        <div className={`relative flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out ${sidebarCollapsed ? 'w-12' : 'w-1/3'}`}>
+          {/* Full panel (fixed width ≈ open width, so it doesn't reflow mid-animation) */}
+          <div
+            className={`h-full flex flex-col overflow-hidden ${sidebarCollapsed ? 'pointer-events-none' : ''}`}
+            style={{ width: '33.333vw' }}
+          >
+            {/* Pill tabs */}
+            <div className="flex items-center gap-1.5 px-4 h-12 border-b border-[#222225] flex-shrink-0">
+              <button
+                onClick={() => setSidebarCollapsed(true)}
+                title="Collapse panel"
+                className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors flex-shrink-0"
+              >
+                <CaretRight size={16} weight="bold" />
+              </button>
+              {(['scan', 'positions', 'news'] as SidePanel[]).map((tab) => {
+                const badge = pillBadge(tab);
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setSidebarPanel(tab)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                      sidebarPanel === tab
+                        ? 'bg-gradient-to-b from-amber-400 to-amber-500 text-black shadow-[0_2px_12px_-3px_rgba(245,158,11,0.6)]'
+                        : 'bg-[#141415] border border-[#222225] text-gray-500 hover:text-gray-300 hover:border-[#2e2e32]'
+                    }`}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    {badge > 0 && (
+                      <span className={`text-[10px] font-bold px-1.5 rounded-full ${
+                        sidebarPanel === tab ? 'bg-black/20 text-black' : 'bg-[#222225] text-gray-600'
+                      }`}>{badge}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Panel content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {panelContent(sidebarPanel)}
+            </div>
+          </div>
+
+          {/* Collapsed icon rail — overlays the left edge, fades in/out with the width animation */}
+          <div className={`absolute inset-y-0 left-0 w-12 flex flex-col items-center gap-1 bg-[#0c0c0d] py-3 transition-opacity duration-200 ${sidebarCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              title="Expand panel"
+              className="w-8 h-8 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors"
+            >
+              <CaretLeft size={16} weight="bold" />
+            </button>
+            <div className="w-6 h-px bg-[#222225] my-1.5" />
+            {([
+              { id: 'scan' as SidePanel, Icon: RadioButton },
+              { id: 'positions' as SidePanel, Icon: Briefcase },
+              { id: 'news' as SidePanel, Icon: Newspaper },
+            ]).map(({ id, Icon }) => {
+              const badge = pillBadge(id);
               return (
                 <button
-                  key={tab}
-                  onClick={() => setSidebarPanel(tab)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    sidebarPanel === tab
-                      ? 'bg-gradient-to-b from-amber-400 to-amber-500 text-black shadow-[0_2px_12px_-3px_rgba(245,158,11,0.6)]'
-                      : 'bg-[#141415] border border-[#222225] text-gray-500 hover:text-gray-300 hover:border-[#2e2e32]'
+                  key={id}
+                  onClick={() => { setSidebarPanel(id); setSidebarCollapsed(false); }}
+                  title={id.charAt(0).toUpperCase() + id.slice(1)}
+                  className={`relative w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
+                    sidebarPanel === id ? 'text-amber-500 bg-amber-500/10' : 'text-gray-500 hover:text-white hover:bg-[#1e1e20]'
                   }`}
                 >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  <Icon size={18} weight={sidebarPanel === id ? 'duotone' : 'regular'} />
                   {badge > 0 && (
-                    <span className={`text-[10px] font-bold px-1.5 rounded-full ${
-                      sidebarPanel === tab ? 'bg-black/20 text-black' : 'bg-[#222225] text-gray-600'
-                    }`}>{badge}</span>
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 flex items-center justify-center text-[8px] font-bold rounded-full bg-amber-500 text-black">{badge}</span>
                   )}
                 </button>
               );
             })}
-          </div>
-          {/* Panel content */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {panelContent(sidebarPanel)}
           </div>
         </div>
       </div>

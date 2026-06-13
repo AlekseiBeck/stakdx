@@ -152,6 +152,12 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
     CAUTION: { label: 'CAUTION', class: 'badge-caution', icon: '⚠' },
   };
 
+  // Combined net unrealized P/L across the connected paper account's open positions.
+  const totalPL = paperPositions.reduce((sum, p) => sum + (parseFloat(p.unrealized_pl) || 0), 0);
+  const totalCost = paperPositions.reduce((sum, p) => sum + Math.abs((parseFloat(p.avg_entry_price) || 0) * (parseFloat(p.qty) || 0)), 0);
+  const totalPLPct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
+  const plUp = totalPL >= 0;
+
   return (
     <div className="card">
       <div className="flex items-center justify-between px-5 py-4 border-b border-[#222225]">
@@ -210,6 +216,24 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
           </button>
         </div>
       </div>
+
+      {/* Net unrealized P/L across the paper account's open positions */}
+      {paperPositions.length > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[#222225] bg-[#0e0e0f]">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
+            <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Net Unrealized P/L</span>
+          </div>
+          <div className="text-right">
+            <div className={`mono text-lg font-bold leading-tight ${plUp ? 'text-emerald-400' : 'text-red-400'}`}>
+              {plUp ? '+' : '−'}${Math.abs(totalPL).toFixed(2)}
+            </div>
+            <div className={`mono text-[11px] leading-tight ${plUp ? 'text-emerald-400/80' : 'text-red-400/80'}`}>
+              {plUp ? '+' : ''}{totalPLPct.toFixed(2)}%
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* iOS "Add to Home Screen" install banner */}
       {showIOSBanner && !iosBannerDismissed && (

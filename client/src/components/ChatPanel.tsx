@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
-  ChatCircleDots, Plus, List, X, PaperPlaneTilt, Flask, CaretRight, CaretDown,
-  ChartLineUp, Check,
+  ChatCircleDots, Plus, List, X, PaperPlaneTilt, Flask, CaretRight,
+  CaretLeft, ChartLineUp, Check, PencilSimple,
 } from '@phosphor-icons/react';
 import { TradeRecommendation, NewsItem, Position } from '../types';
 import {
@@ -138,6 +138,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
 
   // Research mode
@@ -147,6 +148,8 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [tickerInput, setTickerInput] = useState('');
   const [showTickerInput, setShowTickerInput] = useState(false);
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
+  const [folderRenameValue, setFolderRenameValue] = useState('');
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -386,6 +389,24 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     });
   };
 
+  const startRenameFolder = (e: React.MouseEvent, key: string) => {
+    e.stopPropagation();
+    setFolderRenameValue(key === 'Untagged' ? '' : key);
+    setRenamingFolder(key);
+  };
+
+  // Rename a folder = retag every research chat in it to the new ticker symbol.
+  const renameFolder = useCallback(async (key: string, folderSessions: ChatSession[]) => {
+    const t = folderRenameValue.trim().toUpperCase().replace(/[^A-Z.]/g, '').slice(0, 6);
+    setRenamingFolder(null);
+    setFolderRenameValue('');
+    if (!t || t === key) return;
+    for (const s of folderSessions) {
+      const updated = await applyResearchPatch(s, { ticker: t });
+      patchSessionLocal(updated);
+    }
+  }, [folderRenameValue, applyResearchPatch, patchSessionLocal]);
+
   // ── Sidebar grouping: research sessions foldered by ticker, then regular chats
   const { researchFolders, regularSessions } = useMemo(() => {
     const folders: Record<string, ChatSession[]> = {};
@@ -445,12 +466,15 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
         />
       )}
 
-      {/* Session sidebar */}
+      {/* Session sidebar — collapses fully (width 0) on desktop; off-canvas overlay on mobile */}
       <div className={`
-        absolute lg:relative z-20 flex flex-col bg-[#0e0e0f] border-r border-[#1e1e20]
-        w-64 h-full transition-transform duration-200 ease-in-out
+        absolute lg:relative z-20 flex flex-shrink-0 bg-[#0e0e0f] overflow-hidden
+        w-64 h-full transition-all duration-200 ease-in-out border-r border-[#1e1e20]
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        ${historyCollapsed ? 'lg:w-0 lg:border-r-0' : 'lg:w-64'}
       `}>
+        {/* Full history content — fixed width so it clips/slides instead of reflowing */}
+        <div className={`w-64 h-full flex flex-col flex-shrink-0 ${historyCollapsed ? 'lg:pointer-events-none' : ''}`}>
         <div className="flex items-center justify-between px-3 h-12 border-b border-[#222225]">
           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">History</span>
           <button
@@ -475,19 +499,47 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                   </p>
                   {researchFolders.map(({ ticker, sessions: folderSessions }) => {
                     const collapsed = collapsedFolders.has(ticker);
+                    const renaming = renamingFolder === ticker;
                     return (
                       <div key={ticker}>
-                        <button
-                          onClick={() => toggleFolder(ticker)}
-                          className="w-full flex items-center gap-1.5 px-3 py-1.5 text-gray-400 hover:text-white transition-colors"
-                        >
-                          {collapsed
-                            ? <CaretRight size={11} weight="bold" className="text-gray-600" />
-                            : <CaretDown size={11} weight="bold" className="text-gray-600" />}
-                          <span className="mono text-[11px] font-bold tracking-wide">{ticker}</span>
-                          <span className="text-[10px] text-gray-600 ml-auto">{folderSessions.length}</span>
-                        </button>
-                        {!collapsed && folderSessions.map(s => sessionRow(s, true))}
+                        {renaming ? (
+                          <form
+                            onSubmit={(e) => { e.preventDefault(); renameFolder(ticker, folderSessions); }}
+                            className="flex items-center gap-1 px-3 py-1.5"
+                          >
+                            <input
+                              autoFocus
+                              value={folderRenameValue}
+                              onChange={(e) => setFolderRenameValue(e.target.value.toUpperCase().replace(/[^A-Z.]/g, '').slice(0, 6))}
+                              onKeyDown={(e) => { if (e.key === 'Escape') { setRenamingFolder(null); setFolderRenameValue(''); } }}
+                              placeholder="TICKER"
+                              className="w-20 bg-[#141415] border border-amber-500/40 rounded px-1.5 py-0.5 mono text-[11px] font-bold text-white placeholder-gray-700 focus:outline-none"
+                            />
+                            <button type="submit" className="w-5 h-5 flex items-center justify-center rounded text-amber-400 hover:bg-amber-500/10" title="Rename folder">
+                              <Check size={12} weight="bold" />
+                            </button>
+                          </form>
+                        ) : (
+                          <div className="group/folder flex items-center gap-1.5 px-3 py-1.5 text-gray-400 hover:text-white transition-colors">
+                            <button onClick={() => toggleFolder(ticker)} className="flex items-center gap-1.5 flex-1 min-w-0 text-left">
+                              <CaretRight size={11} weight="bold" className={`text-gray-600 flex-shrink-0 transition-transform duration-200 ${collapsed ? '' : 'rotate-90'}`} />
+                              <span className="mono text-[11px] font-bold tracking-wide truncate">{ticker}</span>
+                            </button>
+                            <button
+                              onClick={(e) => startRenameFolder(e, ticker)}
+                              title="Rename folder"
+                              className="opacity-0 group-hover/folder:opacity-100 w-5 h-5 flex items-center justify-center rounded text-gray-500 hover:text-amber-400 transition-all flex-shrink-0"
+                            >
+                              <PencilSimple size={12} weight="bold" />
+                            </button>
+                            <span className="text-[10px] text-gray-600 flex-shrink-0">{folderSessions.length}</span>
+                          </div>
+                        )}
+                        <div className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'}`}>
+                          <div className="overflow-hidden">
+                            {folderSessions.map(s => sessionRow(s, true))}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -508,6 +560,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
             </>
           )}
         </div>
+        </div>
       </div>
 
       {/* Main chat area */}
@@ -516,9 +569,17 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
         <div className="flex-shrink-0 flex items-center gap-2 px-4 h-12 border-b border-[#222225]">
           <button
             onClick={() => setSidebarOpen(o => !o)}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors"
+            title="Toggle history"
+            className="lg:hidden w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors"
           >
             <List size={16} weight="bold" />
+          </button>
+          <button
+            onClick={() => setHistoryCollapsed(c => !c)}
+            title={historyCollapsed ? 'Show history' : 'Hide history'}
+            className="hidden lg:flex w-7 h-7 items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors flex-shrink-0"
+          >
+            {historyCollapsed ? <CaretRight size={16} weight="bold" /> : <CaretLeft size={16} weight="bold" />}
           </button>
           {researchTicker && (
             <span className="mono text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/25 rounded px-1.5 py-0.5 flex-shrink-0">
@@ -589,9 +650,6 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
             </div>
           ) : messages.length === 1 && messages[0].id === 'welcome' ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-6 fade-in-up">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-xl font-bold text-black shadow-[0_0_40px_-8px_rgba(245,158,11,0.55)] mb-5">
-                S
-              </div>
               <h2 className="font-display text-xl font-bold text-white mb-1.5">Stakdx AI</h2>
               <p className="text-sm text-gray-500 max-w-sm mb-4 leading-relaxed">
                 Ask about scan results, your positions, or any setup you're watching.

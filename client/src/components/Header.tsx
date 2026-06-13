@@ -55,10 +55,10 @@ export default function Header({
   }, []);
 
   const sessionConfig = {
-    open:   { label: 'OPEN',   color: 'text-emerald-400', dotColor: 'bg-emerald-400', border: 'border-emerald-800/60 bg-emerald-950/40' },
-    pre:    { label: 'PRE',    color: 'text-amber-400',   dotColor: 'bg-amber-400',   border: 'border-amber-800/60 bg-amber-950/40'   },
-    after:  { label: 'AH',     color: 'text-violet-400',  dotColor: 'bg-violet-400',  border: 'border-violet-800/60 bg-violet-950/40'  },
-    closed: { label: 'CLOSED', color: 'text-gray-500',    dotColor: 'bg-gray-600',    border: 'border-gray-800/60 bg-gray-950/40'     },
+    open:   { label: 'MARKET OPEN',   color: 'text-emerald-400', dotColor: 'bg-emerald-400', border: 'border-emerald-800/60 bg-emerald-950/40' },
+    pre:    { label: 'PRE-MARKET',    color: 'text-amber-400',   dotColor: 'bg-amber-400',   border: 'border-amber-800/60 bg-amber-950/40'   },
+    after:  { label: 'AFTER HOURS',   color: 'text-violet-400',  dotColor: 'bg-violet-400',  border: 'border-violet-800/60 bg-violet-950/40'  },
+    closed: { label: 'MARKET CLOSED', color: 'text-gray-500',    dotColor: 'bg-gray-600',    border: 'border-gray-800/60 bg-gray-950/40'     },
   };
 
   const cfg = sessionConfig[session];
@@ -153,8 +153,8 @@ export default function Header({
       {/* Mobile: two rows (<1024px) */}
       <div className="lg:hidden">
 
-        {/* Row 1: logo + mode switcher + market status + sign out */}
-        <div className="flex items-center gap-2 px-3 pt-2 pb-2">
+        {/* Row 1: logo + mode switcher + market status */}
+        <div className="flex items-center gap-1.5 px-3 pt-2 pb-2">
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <img src="/stakd-logo.png" className="h-5 w-auto rounded-md" alt="" />
             <span className="font-display text-sm font-bold tracking-tight text-white">Stakdx</span>
@@ -169,17 +169,9 @@ export default function Header({
             <span className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dotColor}`} />
             {cfg.label}
           </div>
-
-          <button
-            onClick={onSignOut}
-            className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#1e1e20] border border-[#2a2a2c] text-gray-400 hover:text-red-400 hover:bg-red-950/20 active:scale-95 transition-all flex-shrink-0"
-            title="Sign out"
-          >
-            <SignOut size={16} weight="bold" />
-          </button>
         </div>
 
-        {/* Row 2: scan button + buying power + optional brokerage/demo */}
+        {/* Row 2: scan button + buying power + optional brokerage/demo + sign out */}
         <div className="flex items-center gap-2 px-3 pb-2">
           <button
             onClick={onScan}
@@ -214,6 +206,14 @@ export default function Header({
           {isMockData && (
             <span className="px-2 py-1 rounded-md bg-amber-950/50 border border-amber-800/40 text-amber-400 text-xs font-medium flex-shrink-0">Demo</span>
           )}
+
+          <button
+            onClick={onSignOut}
+            className="ml-auto w-10 h-10 flex items-center justify-center rounded-lg bg-[#1e1e20] border border-[#2a2a2c] text-gray-400 hover:text-red-400 hover:bg-red-950/20 active:scale-95 transition-all flex-shrink-0"
+            title="Sign out"
+          >
+            <SignOut size={16} weight="bold" />
+          </button>
         </div>
       </div>
     </header>
