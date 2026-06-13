@@ -19,7 +19,7 @@ const FEATURES = [
   {
     icon: <RadioButton size={20} weight="duotone" />,
     title: 'Daily Market Scan',
-    desc: 'AI screens 240+ tickers every morning and surfaces the highest-conviction swing setups — long, short, calls, and puts.',
+    desc: 'AI screens the entire US market every morning and surfaces the highest-conviction swing setups — long, short, calls, and puts.',
   },
   {
     icon: <BellRinging size={20} weight="duotone" />,
@@ -42,7 +42,7 @@ const STEPS = [
   {
     num: '01',
     title: 'Run the scan',
-    desc: 'One click screens 240+ tickers and enriches the top candidates with news, sentiment, earnings, and volume data.',
+    desc: 'One click screens thousands of US-listed tickers and enriches the top candidates with news, sentiment, earnings, and volume data.',
   },
   {
     num: '02',
@@ -270,11 +270,7 @@ export default function AuthPage() {
         {/* Hero */}
         <section className="relative z-10 max-w-6xl mx-auto px-6 pt-14 sm:pt-20 pb-16 lg:pb-24 grid lg:grid-cols-2 gap-14 lg:gap-10 items-center min-h-[82vh]">
           <div className="text-center lg:text-left">
-            <div className="hero-reveal inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs text-amber-300/90 font-medium mb-6">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 pulse-dot" />
-              AI-powered swing trading
-            </div>
-            <h1 className="hero-reveal font-display text-5xl sm:text-6xl font-bold text-white tracking-tight leading-[1.05] mb-5">
+            <h1 className="hero-reveal font-display text-5xl sm:text-6xl font-bold text-white tracking-tight leading-[1.05] mb-5 mt-2">
               Trade with<br />an <span className="text-gradient-amber">edge.</span>
             </h1>
             <p className="hero-reveal text-gray-400 text-lg max-w-md mx-auto lg:mx-0 mb-8 leading-relaxed">
@@ -293,7 +289,7 @@ export default function AuthPage() {
             </div>
             <p className="hero-reveal text-xs text-gray-600 mb-8">No credit card required</p>
             <div className="hero-reveal flex items-center justify-center lg:justify-start gap-5 text-xs text-gray-500">
-              <span><span className="mono font-bold text-gray-300">240+</span> tickers scanned</span>
+              <span><span className="mono font-bold text-gray-300">4,000+</span> tickers scanned</span>
               <span className="w-px h-3 bg-[#2a2a2e]" />
               <span><span className="mono font-bold text-gray-300">30</span> setups ranked</span>
               <span className="w-px h-3 bg-[#2a2a2e]" />
@@ -323,7 +319,7 @@ export default function AuthPage() {
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-white tracking-tight mb-3">
               Everything you need to <span className="text-gradient-amber">swing trade</span>
             </h2>
-            <p className="text-gray-500 max-w-lg mx-auto">One dashboard for scanning, tracking, alerting, and executing — powered by Claude AI.</p>
+            <p className="text-gray-500 max-w-lg mx-auto">One dashboard for scanning, tracking, alerting, and executing — powered by AI-driven decision-making.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {FEATURES.map((f) => (

@@ -5,14 +5,19 @@ import rateLimit from 'express-rate-limit';
 import {
   fetchCandles,
   fetchCandlesForTicker,
+  fetchDailyHistory,
   fetchNews,
   fetchNewsForTicker,
-  fetchLatestPrices,
   fetchPricesForTickers,
+  getUniverse,
   summarizeCandles,
   fetchMarketNews,
   scoreTicker,
   scoreTickerForMode,
+  computeTechnicalProfile,
+  scoreTechnical,
+  averageDollarVolume,
+  MIN_DOLLAR_VOLUME,
   fetchStockTwitsSentiment,
   fetchIntradayCandles,
   fetchWeeklyCandles,
@@ -21,13 +26,14 @@ import {
   fetchChartCandles,
   CHART_RANGES,
 } from './alpaca';
-import type { ChartRange } from './alpaca';
+import type { ChartRange, TechnicalProfile } from './alpaca';
 import {
   analyzeCandlesWithClaude,
   analyzeBatchWithClaude,
   analyzePositionWithClaude,
   classifyMacroRegime,
   scoreNewsImpact,
+  triageCandidates,
   streamChat,
 } from './claude';
 import { fetchFinnhubNews, fetchUpcomingEarnings, fetchEconomicCalendar } from './finnhub';
@@ -69,7 +75,6 @@ import {
   placeOrder,
   cancelOrder,
 } from './brokerage';
-import { WATCHLIST } from './alpaca';
 import { initWebPush, hasVapidKeys, sendToUser } from './notifications';
 
 const app = express();
@@ -153,6 +158,10 @@ const ETF_TICKERS = new Set([
   'TQQQ','SQQQ','SOXS','SOXL','TNA','TZA','ARKG',
 ]);
 
+// Mega-caps used for the Phase-1 general company-news pull (Finnhub). Fixed so the
+// news feed stays relevant regardless of the dynamic universe's ordering.
+const CORE_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AMD', 'AVGO', 'JPM'];
+
 // ─── Shared scan pipeline ─────────────────────────────────────────────────────
 // Used by both /api/scan and /api/scan/stream to avoid code duplication.
 
@@ -176,17 +185,16 @@ async function runScanPipeline(
   newsItems: NewsItem[];
   marketNews: NewsItem[];
 }> {
-  const stockTickers = WATCHLIST.filter(t => !ETF_TICKERS.has(t));
+  const universe = await getUniverse();
 
   // ── Phase 1: fetch all raw data in parallel ──────────────────────────────
-  const [candles, news, marketNews, prices, finnhubNewsData, earningsData, economicEvents] =
+  const [candles, news, marketNews, finnhubNewsData, earningsData, economicEvents] =
     await Promise.all([
       fetchCandles(),
       fetchNews(),
       fetchMarketNews(),
-      fetchLatestPrices(),
-      fetchFinnhubNews(stockTickers.slice(0, 10)),
-      fetchUpcomingEarnings(WATCHLIST),
+      fetchFinnhubNews(CORE_TICKERS),
+      fetchUpcomingEarnings(universe),
       fetchEconomicCalendar(),
     ]);
 
@@ -197,21 +205,17 @@ async function runScanPipeline(
       candles: null, topTickers: [], topCandles: {}, weeklyData: {}, intradayData: {},
       premarketData: {}, vwapMap: {}, macroRegime: null, scoredNews: [],
       stockTwitsSentiment: {}, redditSentiment: {}, earningsData, economicEvents,
-      prices: prices ?? {}, newsItems, marketNews,
+      prices: {}, newsItems, marketNews,
     };
   }
 
-  // ── Phase 2: pre-filter top 30 tickers ──────────────────────────────────
-  const scored = Object.entries(candles)
-    .map(([ticker, c]) => ({ ticker, score: scoreTickerForMode(c, scanMode) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 30);
+  // ── Phase 2: liquidity screen across the whole universe ──────────────────
+  const liquid = Object.entries(candles)
+    .filter(([, c]) => averageDollarVolume(c) >= MIN_DOLLAR_VOLUME)
+    .map(([ticker]) => ticker);
 
-  const topTickers = scored.map(s => s.ticker);
-  const topCandles: Record<string, typeof candles[string]> = {};
-  for (const { ticker } of scored) topCandles[ticker] = candles[ticker];
-
-  console.log(`[scan] mode=${scanMode} → top ${topTickers.length}: ${topTickers.join(', ')}`);
+  const spyCandles = candles['SPY'] ?? [];
+  const qqqCandles = candles['QQQ'] ?? [];
 
   // Combine all news for scoring
   const allNewsForScoring = [
@@ -219,26 +223,64 @@ async function runScanPipeline(
     ...finnhubNewsData.map(n => ({ headline: n.headline, ticker: n.ticker, source: n.source })),
   ];
 
-  // ── Phase 3: enrich data + run Haiku analysis layers in parallel ─────────
-  const spyCandles = candles['SPY'] ?? [];
-  const qqqCandles = candles['QQQ'] ?? [];
+  // ── Phase A: deep technical profiling of every liquid name ───────────────
+  // Pull a wider daily-history window for the liquid shortlist and rank by setup
+  // quality (trend, relative strength, breakout proximity), not just raw volume.
+  const history = await fetchDailyHistory([...liquid, 'SPY']);
+  const spyHistory = history['SPY'] ?? spyCandles;
+  const ranked = liquid
+    .map(t => computeTechnicalProfile(t, history[t] ?? [], spyHistory))
+    .filter((p): p is TechnicalProfile => p !== null)
+    .map(p => ({ p, score: scoreTechnical(p, scanMode) }))
+    .sort((a, b) => b.score - a.score);
 
+  const pool = ranked.slice(0, 100).map(x => x.p);
+
+  // Macro regime + news scoring run now so the regime can inform triage.
+  const [macroRegime, scoredNews] = await Promise.all([
+    classifyMacroRegime(spyCandles, qqqCandles, marketNews, economicEvents),
+    scoreNewsImpact(allNewsForScoring),
+  ]);
+
+  // ── Phase C: LLM triage selects the 30 worth deep analysis ───────────────
+  const earningsTickers = new Set(earningsData.map(e => e.ticker));
+  const triaged = await triageCandidates(pool, scanMode, macroRegime, earningsTickers, 30);
+
+  let topTickers = triaged.map(t => t.ticker);
+  if (topTickers.length > 0) {
+    console.log(`[scan] mode=${scanMode} triage → ${topTickers.length}: ${topTickers.join(', ')}`);
+  } else {
+    // Fallbacks: technical-score top 30, else the raw 5-day momentum screen.
+    topTickers = pool.slice(0, 30).map(p => p.ticker);
+    if (topTickers.length === 0) {
+      topTickers = Object.entries(candles)
+        .filter(([, c]) => averageDollarVolume(c) >= MIN_DOLLAR_VOLUME)
+        .map(([ticker, c]) => ({ ticker, score: scoreTickerForMode(c, scanMode) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 30)
+        .map(s => s.ticker);
+    }
+    console.log(`[scan] mode=${scanMode} triage unavailable → fallback top ${topTickers.length}`);
+  }
+
+  const topCandles: Record<string, typeof candles[string]> = {};
+  for (const ticker of topTickers) if (candles[ticker]) topCandles[ticker] = candles[ticker];
+
+  // ── Phase 3: enrich the selected 30 in parallel ──────────────────────────
   const [
-    macroRegime,
-    scoredNews,
     stockTwitsSentiment,
     intradayCandles,
     premarketCandles,
     weeklyCandles,
     redditSentiment,
+    prices,
   ] = await Promise.all([
-    classifyMacroRegime(spyCandles, qqqCandles, marketNews, economicEvents),
-    scoreNewsImpact(allNewsForScoring),
     fetchStockTwitsSentiment(topTickers.slice(0, 15)),
     fetchIntradayCandles(topTickers.slice(0, 20)),
     fetchPremarketCandles(topTickers.slice(0, 20)),
     fetchWeeklyCandles(topTickers),
     fetchRedditSentiment(topTickers),
+    fetchPricesForTickers(topTickers),
   ]);
 
   const intradayData = intradayCandles ?? {};
@@ -411,8 +453,8 @@ app.get('/api/chart/:ticker', requireAuth, async (req: AuthRequest, res) => {
 });
 
 // ─── GET /api/watchlist — ticker universe (used for client-side ticker detection)
-app.get('/api/watchlist', requireAuth, (_req, res) => {
-  return res.json({ tickers: WATCHLIST });
+app.get('/api/watchlist', requireAuth, async (_req, res) => {
+  return res.json({ tickers: await getUniverse() });
 });
 
 // ─── GET /api/positions ───────────────────────────────────────────────────────
@@ -888,8 +930,8 @@ async function runPriceAlertCheck(): Promise<void> {
 
     // Fetch current prices for all relevant tickers
     const tickers = [...new Set(positions.map(p => p.ticker))];
-    const prices = await fetchLatestPrices();
-    if (!prices) return;
+    const prices = await fetchPricesForTickers(tickers);
+    if (!prices || Object.keys(prices).length === 0) return;
 
     for (const pos of positions) {
       const price = prices[pos.ticker];

@@ -6,6 +6,7 @@ import {
 import {
   summarizeCandles, summarizeIntradayCandles, summarizePremarket, summarizeWeeklyCandles,
 } from './alpaca';
+import type { TechnicalProfile } from './alpaca';
 import type { FinnhubNewsItem, EarningsEvent } from './finnhub';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -150,6 +151,30 @@ const POSITION_OUTPUT_FORMAT = {
   },
 };
 
+const TRIAGE_OUTPUT_FORMAT = {
+  type: 'json_schema' as const,
+  schema: {
+    type: 'object',
+    properties: {
+      picks: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            ticker: { type: 'string' },
+            bias: { type: 'string', enum: ['long', 'short'] },
+            reason: { type: 'string' },
+          },
+          required: ['ticker', 'bias', 'reason'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['picks'],
+    additionalProperties: false,
+  },
+};
+
 // Extract the text block from a response that may also contain thinking blocks
 function responseText(msg: Anthropic.Message): string {
   for (const block of msg.content) {
@@ -266,6 +291,92 @@ ${newsLines}`;
       .filter((x): x is ScoredNewsItem => x !== null);
   } catch (err) {
     console.error('[claude] News scoring error:', err);
+    return [];
+  }
+}
+
+// ─── Stage C: Candidate Triage (Claude Sonnet) ───────────────────────────────
+//
+// The deterministic technical screen narrows the universe to a liquid shortlist;
+// this stage applies a senior analyst's judgment to pick which names actually
+// deserve the expensive Opus deep-dive. Runs on Sonnet over compact feature rows
+// (cheap), with adaptive thinking, before any Opus tokens are spent.
+
+export interface TriagePick {
+  ticker: string;
+  bias: 'long' | 'short';
+  reason: string;
+}
+
+export async function triageCandidates(
+  profiles: TechnicalProfile[],
+  mode: 'long' | 'short' | 'both',
+  regime: MacroRegime | null,
+  earningsTickers: Set<string>,
+  count: number
+): Promise<TriagePick[]> {
+  if (!hasAnthropicKey() || profiles.length === 0) return [];
+
+  const client = getClient();
+
+  const rows = profiles.map(p => {
+    const flags = [
+      p.trendUp ? 'trend↑' : 'trend↓',
+      `RS${p.rs20 >= 0 ? '+' : ''}${p.rs20.toFixed(1)}`,
+      `${p.high20Pct.toFixed(1)}%<20dHi`,
+      `${p.low20Pct.toFixed(1)}%>20dLo`,
+      `ATR${p.atrPct.toFixed(1)}%`,
+      `vol${p.volRatio.toFixed(1)}x`,
+      `SMA50${p.distSma50 >= 0 ? '+' : ''}${p.distSma50.toFixed(0)}%`,
+    ];
+    if (earningsTickers.has(p.ticker)) flags.push('earnings≤7d');
+    return `${p.ticker} $${p.price.toFixed(2)} ${p.changePct >= 0 ? '+' : ''}${p.changePct.toFixed(1)}% | ${flags.join(' ')}`;
+  }).join('\n');
+
+  const regimeLine = regime
+    ? `Market regime: ${regime.regime}, Fed ${regime.fedStance}. ${regime.summary}`
+    : 'Market regime: unknown.';
+
+  const dirInstruction = mode === 'long'
+    ? 'Select LONG setups only (bias=long).'
+    : mode === 'short'
+      ? 'Select SHORT setups only (bias=short).'
+      : 'Select the best setups in either direction; set bias=long or short per name.';
+
+  const userMsg = `${regimeLine}
+
+You are triaging ${profiles.length} liquid candidates already pre-screened for volume and liquidity. Select the ${count} highest-quality swing-trade setups worth a deep analyst dive — the way a senior analyst narrows a watchlist before committing real research time.
+
+Favor: trend alignment, relative strength vs SPY, clean proximity to a breakout (longs) or breakdown (shorts), a tradeable ATR, and volume confirmation. Avoid: over-extended names stretched far from their moving average, choppy low-conviction tape, and setups that fight the market regime. ${dirInstruction}
+
+Candidates — one per line: TICKER price dayChange | trend, relative-strength-vs-SPY, % from 20-day high, % from 20-day low, ATR%, volume multiple, % from 50-day SMA, earnings flag:
+${rows}
+
+Return exactly ${count} picks (or all candidates if fewer exist), ordered best-first, each with a one-line reason citing the specific signals that make it a high-conviction setup.`;
+
+  try {
+    // No extended thinking here: this is a bounded selection over clear feature
+    // rows, and it gates the (slow) Opus batches — it must stay fast. The deep
+    // reasoning happens later in the Opus deep-dive. Structured output guarantees
+    // schema-valid JSON in the text block.
+    const msg = await client.messages.create({
+      model: CHAT_MODEL,
+      max_tokens: 4096,
+      system: 'You are a senior equities analyst triaging a swing-trade scan. Pick the highest-conviction setups from the technical features and market context provided. Be selective and decisive.',
+      messages: [{ role: 'user', content: userMsg }],
+      output_config: { format: TRIAGE_OUTPUT_FORMAT },
+    });
+
+    const picks = (JSON.parse(responseText(msg)) as { picks: TriagePick[] }).picks ?? [];
+
+    // Keep only known tickers, dedupe, cap at count.
+    const valid = new Set(profiles.map(p => p.ticker));
+    const seen = new Set<string>();
+    return picks
+      .filter(p => valid.has(p.ticker) && !seen.has(p.ticker) && (seen.add(p.ticker), true))
+      .slice(0, count);
+  } catch (err) {
+    console.error('[claude] Triage error:', err);
     return [];
   }
 }
