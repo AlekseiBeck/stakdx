@@ -31,10 +31,13 @@ function getClient(): Anthropic {
 }
 
 // ─── Models ──────────────────────────────────────────────────────────────────
-// Opus 4.8 for the calls where prediction quality matters (scan analysis, position
-// verdicts, chat). Haiku 4.5 stays on the cheap pre-processing layers (macro regime,
-// news scoring) where speed/cost matter more than depth.
-const ANALYSIS_MODEL = 'claude-opus-4-8';
+// Three tiers by how much each call's quality drives product value:
+//   SCAN_MODEL (Opus 4.8)  — the scan, our deepest prediction task. Worth the cost.
+//   CHAT_MODEL (Sonnet 4.6) — chat + position verdicts: interactive/bounded reasoning
+//                             where Sonnet is nearly as strong, cheaper, and faster.
+//   FAST_MODEL (Haiku 4.5) — cheap pre-processing (macro regime, news scoring).
+const SCAN_MODEL = 'claude-opus-4-8';
+const CHAT_MODEL = 'claude-sonnet-4-6';
 const FAST_MODEL = 'claude-haiku-4-5-20251001';
 
 // ─── Structured output schemas ───────────────────────────────────────────────
@@ -575,7 +578,7 @@ export async function analyzeCandlesWithClaude(
   try {
     const [r1, r2] = await Promise.all([
       client.messages.create({
-        model: ANALYSIS_MODEL,
+        model: SCAN_MODEL,
         max_tokens: 16000,
         thinking: { type: 'adaptive' },
         system: cachedSystem,
@@ -584,7 +587,7 @@ export async function analyzeCandlesWithClaude(
       }),
       entries.slice(mid).length > 0
         ? client.messages.create({
-            model: ANALYSIS_MODEL,
+            model: SCAN_MODEL,
             max_tokens: 16000,
             thinking: { type: 'adaptive' },
             system: cachedSystem,
@@ -646,7 +649,7 @@ export async function analyzeBatchWithClaude(
 
   try {
     const msg = await client.messages.create({
-      model: ANALYSIS_MODEL,
+      model: SCAN_MODEL,
       max_tokens: 16000,
       thinking: { type: 'adaptive' },
       system: [{ type: 'text', text: buildScanPrompt(), cache_control: { type: 'ephemeral' } }],
@@ -833,7 +836,7 @@ export async function* streamChat(
   // the assistant turn to resume. The final text is yielded once complete.
   for (let iter = 0; iter < 5; iter++) {
     const response = await client.messages.create({
-      model: ANALYSIS_MODEL,
+      model: CHAT_MODEL,
       max_tokens: 8000,
       thinking: { type: 'adaptive' },
       system: systemBlocks,
@@ -900,7 +903,7 @@ Evaluate this position and return your verdict as JSON.`;
 
   try {
     const msg = await client.messages.create({
-      model: ANALYSIS_MODEL,
+      model: CHAT_MODEL,
       max_tokens: 2048,
       thinking: { type: 'adaptive' },
       system: buildPositionPrompt(),
