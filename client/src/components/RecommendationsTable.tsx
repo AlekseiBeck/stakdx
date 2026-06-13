@@ -79,10 +79,14 @@ export default function RecommendationsTable({
   if (!isStreaming && recommendations.length === 0) {
     return (
       <div className="card p-12 text-center">
-        <div className="w-16 h-16 rounded-full bg-[#1e1e20] flex items-center justify-center mx-auto mb-4">
-          <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
-          </svg>
+        <div className="relative w-16 h-16 mx-auto mb-4">
+          <span className="absolute inset-0 rounded-full border border-amber-500/40 radar-ping" />
+          <span className="absolute inset-0 rounded-full border border-amber-500/25 radar-ping [animation-delay:1.2s]" />
+          <div className="relative w-16 h-16 rounded-full bg-[#1e1e20] border border-[#2a2a2c] flex items-center justify-center">
+            <svg className="w-8 h-8 text-amber-500/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
+            </svg>
+          </div>
         </div>
         <p className="text-gray-400 font-medium">No scan results yet</p>
         <p className="text-gray-600 text-sm mt-1">Run a scan to analyze the market</p>

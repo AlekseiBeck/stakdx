@@ -27,10 +27,132 @@ function hasAnthropicKey(): boolean {
 }
 
 function getClient(): Anthropic {
-  return new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-    defaultHeaders: { 'anthropic-beta': 'prompt-caching-2024-07-31' },
-  });
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+// Opus 4.8 for the calls where prediction quality matters (scan analysis, position
+// verdicts, chat). Haiku 4.5 stays on the cheap pre-processing layers (macro regime,
+// news scoring) where speed/cost matter more than depth.
+const ANALYSIS_MODEL = 'claude-opus-4-8';
+const FAST_MODEL = 'claude-haiku-4-5-20251001';
+
+// ─── Structured output schemas ───────────────────────────────────────────────
+// Passed via output_config.format — the API guarantees the response text is valid
+// JSON matching the schema, so no markdown-fence stripping or retry logic needed.
+// Note: structured outputs forbid numeric min/max constraints; ranges live in
+// descriptions and the prompt instead.
+
+const SCAN_OUTPUT_FORMAT = {
+  type: 'json_schema' as const,
+  schema: {
+    type: 'object',
+    properties: {
+      setups: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            ticker: { type: 'string' },
+            direction: { type: 'string', enum: ['LONG', 'SHORT', 'CALL', 'PUT'] },
+            confidence: { type: 'integer', description: 'Calibrated confidence, 58-100' },
+            entryZone: { type: 'string', description: '"$X.XX - $Y.YY"' },
+            stopLoss: { type: 'string', description: '"$X.XX"' },
+            target: { type: 'string', description: '"$X.XX"' },
+            timeframe: { type: 'string', description: 'e.g. "1-2 days"' },
+            rationale: { type: 'string' },
+            pattern: { type: 'string' },
+            positionSize: { type: 'string' },
+            maxRisk: { type: 'string' },
+            potentialGain: { type: 'string' },
+          },
+          required: [
+            'ticker', 'direction', 'confidence', 'entryZone', 'stopLoss', 'target',
+            'timeframe', 'rationale', 'pattern', 'positionSize', 'maxRisk', 'potentialGain',
+          ],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['setups'],
+    additionalProperties: false,
+  },
+};
+
+const MACRO_OUTPUT_FORMAT = {
+  type: 'json_schema' as const,
+  schema: {
+    type: 'object',
+    properties: {
+      regime: { type: 'string', enum: ['RISK_ON', 'RISK_OFF', 'MIXED'] },
+      fedStance: { type: 'string', enum: ['HAWKISH', 'NEUTRAL', 'DOVISH'] },
+      topRisks: { type: 'array', items: { type: 'string' } },
+      sectorBias: {
+        type: 'object',
+        properties: {
+          tech: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] },
+          financials: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] },
+          energy: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] },
+          healthcare: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] },
+          consumer: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] },
+          industrials: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] },
+        },
+        required: ['tech', 'financials', 'energy', 'healthcare', 'consumer', 'industrials'],
+        additionalProperties: false,
+      },
+      summary: { type: 'string' },
+    },
+    required: ['regime', 'fedStance', 'topRisks', 'sectorBias', 'summary'],
+    additionalProperties: false,
+  },
+};
+
+const NEWS_SCORE_OUTPUT_FORMAT = {
+  type: 'json_schema' as const,
+  schema: {
+    type: 'object',
+    properties: {
+      scores: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: 'integer' },
+            impact: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+            direction: { type: 'string', enum: ['BULLISH', 'BEARISH', 'NEUTRAL'] },
+            category: { type: 'string', enum: ['earnings', 'macro', 'regulatory', 'product', 'ma', 'geopolitical', 'other'] },
+          },
+          required: ['index', 'impact', 'direction', 'category'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['scores'],
+    additionalProperties: false,
+  },
+};
+
+const POSITION_OUTPUT_FORMAT = {
+  type: 'json_schema' as const,
+  schema: {
+    type: 'object',
+    properties: {
+      verdict: { type: 'string', enum: ['HOLD', 'SELL', 'CAUTION'] },
+      reasoning: { type: 'string' },
+      currentPrice: { type: 'string', description: '"$XXX.XX"' },
+      priceChange: { type: 'string', description: '"+X.XX%" or "-X.XX%"' },
+    },
+    required: ['verdict', 'reasoning', 'currentPrice', 'priceChange'],
+    additionalProperties: false,
+  },
+};
+
+// Extract the text block from a response that may also contain thinking blocks
+function responseText(msg: Anthropic.Message): string {
+  for (const block of msg.content) {
+    if (block.type === 'text') return block.text;
+  }
+  return '';
 }
 
 // ─── Layer 1: Macro Regime Classifier (Claude Haiku) ────────────────────────
@@ -65,33 +187,18 @@ ${calendarLines}
 Recent broad market headlines:
 ${newsLines}
 
-Classify the current market regime. Return ONLY valid JSON, no other text:
-{
-  "regime": "RISK_ON" | "RISK_OFF" | "MIXED",
-  "fedStance": "HAWKISH" | "NEUTRAL" | "DOVISH",
-  "topRisks": ["risk1", "risk2", "risk3"],
-  "sectorBias": {
-    "tech": "bullish" | "bearish" | "neutral",
-    "financials": "bullish" | "bearish" | "neutral",
-    "energy": "bullish" | "bearish" | "neutral",
-    "healthcare": "bullish" | "bearish" | "neutral",
-    "consumer": "bullish" | "bearish" | "neutral",
-    "industrials": "bullish" | "bearish" | "neutral"
-  },
-  "summary": "One sentence describing the dominant market theme right now"
-}`;
+Classify the current market regime. topRisks should contain the 3 most material risks. summary is one sentence describing the dominant market theme right now.`;
 
   try {
     const msg = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: FAST_MODEL,
       max_tokens: 600,
-      system: 'You are a macro market analyst. Classify the market regime from the data provided. Return ONLY valid JSON — no markdown, no explanation.',
+      system: 'You are a macro market analyst. Classify the market regime from the data provided.',
       messages: [{ role: 'user', content: userMsg }],
+      output_config: { format: MACRO_OUTPUT_FORMAT },
     });
 
-    const raw = msg.content[0].type === 'text' ? msg.content[0].text : '';
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    return JSON.parse(cleaned) as MacroRegime;
+    return JSON.parse(responseText(msg)) as MacroRegime;
   } catch (err) {
     console.error('[claude] Macro regime classification error:', err);
     return null;
@@ -115,30 +222,28 @@ export async function scoreNewsImpact(
     `${i}: [${n.ticker ?? 'MARKET'}] "${n.headline}" — ${n.source}`
   ).join('\n');
 
-  const userMsg = `Score each headline for stock trading impact. Index is 0-based.
+  const userMsg = `Score each headline for stock trading impact. Index is 0-based. Return one entry per headline.
 
 Headlines:
-${newsLines}
-
-Return ONLY a valid JSON array (one entry per headline):
-[{ "index": 0, "impact": "HIGH"|"MEDIUM"|"LOW", "direction": "BULLISH"|"BEARISH"|"NEUTRAL", "category": "earnings"|"macro"|"regulatory"|"product"|"ma"|"geopolitical"|"other" }]`;
+${newsLines}`;
 
   try {
     const msg = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: FAST_MODEL,
       max_tokens: 1200,
-      system: 'You are a financial news analyst. Score each headline for its likely impact on stock prices. Return ONLY a valid JSON array — no markdown, no explanation.',
+      system: 'You are a financial news analyst. Score each headline for its likely impact on stock prices.',
       messages: [{ role: 'user', content: userMsg }],
+      output_config: { format: NEWS_SCORE_OUTPUT_FORMAT },
     });
 
-    const raw = msg.content[0].type === 'text' ? msg.content[0].text : '';
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const scored = JSON.parse(cleaned) as Array<{
-      index: number;
-      impact: 'HIGH' | 'MEDIUM' | 'LOW';
-      direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-      category: ScoredNewsItem['category'];
-    }>;
+    const scored = (JSON.parse(responseText(msg)) as {
+      scores: Array<{
+        index: number;
+        impact: 'HIGH' | 'MEDIUM' | 'LOW';
+        direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+        category: ScoredNewsItem['category'];
+      }>;
+    }).scores;
 
     // Map back to full headline objects
     return scored
@@ -293,6 +398,8 @@ function buildIntradaySection(intradayData: Record<string, Candle[]>): string {
 function buildScanPrompt(): string {
   return `You are a senior professional swing trader with 20 years of experience at a top-tier hedge fund. You combine rigorous technical analysis, macro awareness, news catalysts, and social sentiment to surface the highest-conviction setups available right now.
 
+YOUR EDGE IS SELECTIVITY. On a typical day, only 2-6 of the 15 candidates you see are genuinely tradeable. Most candidates were pre-filtered by a momentum score, not by setup quality — expect the majority to fail your filters. Returning few setups (or zero) is a correct, professional outcome; padding the list with marginal setups destroys the win rate. Never invent a pattern to justify including a ticker.
+
 BUYING POWER & SIZING:
 - Buying power is stated in the analysis request ("Buying power: $X"). Use that exact amount.
 - shares = floor(buying_power / entryPrice) — size the position to deploy the full buying power
@@ -336,7 +443,8 @@ Each stock block contains:
 7. Macro alignment — if regime is RISK_OFF, require additional confirmation for any LONG setup.
 
 ━━━ CONFIDENCE SCORING (58–100) ━━━
-• 88–100: Pattern + high volume + news catalyst + trend + clean S/R + macro aligned. Rare.
+Confidence is a calibrated probability statement, not enthusiasm. A "75" should win roughly 3 of 4 times against its stop. When unsure between two scores, pick the lower one.
+• 88–100: Pattern + high volume + news catalyst + trend + clean S/R + macro aligned. Rare — at most 1-2 per month, not per scan.
 • 75–87: Pattern + volume + (news OR trend alignment). Strong setup.
 • 65–74: Clear pattern + average volume. Decent, size conservatively.
 • 58–64: Pattern present, 1–2 weak confirming factors. Include only if no better options.
@@ -361,22 +469,23 @@ VWAP guidance:
 Use CALL/PUT when: confidence ≥ 75, expecting sharp/fast move, clear catalyst, or limited capital.
 Use LONG/SHORT when: steady grind expected, confidence 58-74, options premiums unfavorable.
 
-━━━ OUTPUT FORMAT ━━━
-Return ONLY a valid JSON array. No markdown, no text before or after.
-[{
-  "ticker": string,
-  "direction": "LONG"|"SHORT"|"CALL"|"PUT",
-  "confidence": number (58-100),
-  "entryZone": string ("$X.XX - $Y.YY" — tight range near current price or breakout level),
-  "stopLoss": string ("$X.XX" — technical invalidation, not arbitrary),
-  "target": string ("$X.XX" — next key S/R, must give ≥2:1 R:R),
-  "timeframe": string ("1-2 days"),
-  "rationale": string (3 sentences: name the pattern, cite confirming signals including macro/news/social, explain entry timing using VWAP/intraday context),
-  "pattern": string (specific name, e.g. "Bullish Engulfing at 50-day Support"),
-  "positionSize": string,
-  "maxRisk": string,
-  "potentialGain": string
-}]`;
+━━━ PRICE-LEVEL SELF-CHECK (run on every setup before output) ━━━
+1. Entry zone must sit within ±2% of the latest close OR at a named breakout/retest level visible in the data. Never quote prices that do not derive from the candles provided.
+2. LONG/CALL: stopLoss < entryZone < target. SHORT/PUT: target < entryZone < stopLoss. Any violation = fix or drop the setup.
+3. Recompute R:R from your own numbers: (target − entry) / (entry − stop) ≥ 2.0 (mirror for shorts). If it fails, drop the setup — do not stretch the target to force it.
+4. shares/maxRisk/potentialGain must be arithmetic from your own entry/stop/target — recompute, don't estimate.
+
+━━━ OUTPUT ━━━
+Return a JSON object: { "setups": [ ... ] } where each setup has:
+- ticker, direction (LONG|SHORT|CALL|PUT), confidence (58-100, calibrated)
+- entryZone ("$X.XX - $Y.YY" — tight range near current price or breakout level)
+- stopLoss ("$X.XX" — technical invalidation, not arbitrary)
+- target ("$X.XX" — next key S/R, must give ≥2:1 R:R)
+- timeframe ("1-2 days")
+- rationale (3 sentences: name the pattern, cite confirming signals including macro/news/social, explain entry timing using VWAP/intraday context)
+- pattern (specific name, e.g. "Bullish Engulfing at 50-day Support")
+- positionSize, maxRisk, potentialGain
+An empty setups array is a valid answer when nothing qualifies.`;
 }
 
 // ─── Build per-batch user message ────────────────────────────────────────────
@@ -466,26 +575,28 @@ export async function analyzeCandlesWithClaude(
   try {
     const [r1, r2] = await Promise.all([
       client.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
+        model: ANALYSIS_MODEL,
+        max_tokens: 16000,
+        thinking: { type: 'adaptive' },
         system: cachedSystem,
         messages: [{ role: 'user', content: makeMsg(entries.slice(0, mid)) }],
+        output_config: { format: SCAN_OUTPUT_FORMAT },
       }),
       entries.slice(mid).length > 0
         ? client.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 8192,
+            model: ANALYSIS_MODEL,
+            max_tokens: 16000,
+            thinking: { type: 'adaptive' },
             system: cachedSystem,
             messages: [{ role: 'user', content: makeMsg(entries.slice(mid)) }],
+            output_config: { format: SCAN_OUTPUT_FORMAT },
           })
         : Promise.resolve(null),
     ]);
 
     const parse = (msg: Anthropic.Message | null): TradeRecommendation[] => {
       if (!msg) return [];
-      const raw = msg.content[0].type === 'text' ? msg.content[0].text : '';
-      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      try { return JSON.parse(cleaned) as TradeRecommendation[]; }
+      try { return (JSON.parse(responseText(msg)) as { setups: TradeRecommendation[] }).setups ?? []; }
       catch { return []; }
     };
 
@@ -535,15 +646,15 @@ export async function analyzeBatchWithClaude(
 
   try {
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 8192,
+      model: ANALYSIS_MODEL,
+      max_tokens: 16000,
+      thinking: { type: 'adaptive' },
       system: [{ type: 'text', text: buildScanPrompt(), cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userMsg }],
+      output_config: { format: SCAN_OUTPUT_FORMAT },
     });
 
-    const raw = msg.content[0].type === 'text' ? msg.content[0].text : '';
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const parsed = JSON.parse(cleaned) as TradeRecommendation[];
+    const parsed = (JSON.parse(responseText(msg)) as { setups: TradeRecommendation[] }).setups ?? [];
 
     if (focusDirections.length > 0) return parsed.filter(r => focusDirections.includes(r.direction));
     return parsed;
@@ -578,13 +689,7 @@ PROFIT GUIDANCE:
 - Up >75% of target → recommend partial profit (50%) in reasoning
 - Held 3+ days without hitting target → evaluate momentum stall
 
-Return ONLY valid JSON (no markdown):
-{
-  "verdict": "HOLD"|"SELL"|"CAUTION",
-  "reasoning": string (2-3 sentences: what you see in price action, why this call, what to watch),
-  "currentPrice": string ("$XXX.XX"),
-  "priceChange": string ("+X.XX%" or "-X.XX%")
-}`;
+In reasoning, give 2-3 sentences: what you see in price action, why this call, what to watch.`;
 }
 
 // ─── Chat types ──────────────────────────────────────────────────────────────
@@ -605,7 +710,29 @@ export type ChatContext = {
 
 // ─── Chat: streaming assistant ────────────────────────────────────────────────
 
-function buildChatSystemPrompt(ctx: ChatContext): string {
+// Stable persona/style block — rendered first so the prompt prefix stays
+// byte-identical across requests; live data goes in a second system block.
+const CHAT_PERSONA = `You are Stakdx's AI trading assistant — sharp, direct, and data-driven. You help swing traders analyze setups, manage positions, and understand market conditions.
+
+You have live web search available. Use it proactively when asked about recent news, macro events, earnings, tariffs, Fed decisions, or anything that may have happened after your data snapshot was fetched. If the answer isn't clearly in the data, search before responding.
+
+ANALYSIS STANDARDS:
+- Anchor every opinion to specific numbers from the data: price levels, % moves, volume, stop/target distances. Vague calls ("looks bullish") are worthless to a trader.
+- When asked "should I buy/sell/hold X", structure the answer: current read on the chart, the bull case, the bear case, your lean, and the level that invalidates it.
+- Distinguish timeframes explicitly — a swing-trade answer (days) differs from an investment answer (months). Default to the swing-trading lens unless asked otherwise.
+- If the user's premise conflicts with the data (e.g. "why is NVDA pumping" when it's down), correct it first.
+- Acknowledge uncertainty honestly. Never fabricate prices or news — if data is missing, say so or search for it.
+
+STYLE RULES:
+- Be concise and specific. Reference the actual data when relevant.
+- NEVER use markdown headers (##, ###), horizontal rules (---), or emojis. Ever. Not even one.
+- Use **bold** only for key tickers, numbers, or terms. No decorative bold.
+- Use plain label lines to group content (e.g. "Bullish catalysts:" not "### Bullish Catalysts 🟢").
+- Use bullet points or numbered lists for multiple items.
+- One financial disclaimer max per response, only if truly warranted. Never repeat generic warnings.
+- Traders want signal, not noise. Write like a Bloomberg analyst, not a blog post.`;
+
+function buildChatDataSection(ctx: ChatContext): string {
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
@@ -665,11 +792,7 @@ function buildChatSystemPrompt(ctx: ChatContext): string {
       ].filter(Boolean).join('\n\n')
     : '';
 
-  return `You are Stakdx's AI trading assistant — sharp, direct, and data-driven. Today is ${today}.
-
-You have live web search available. Use it proactively when asked about recent news, macro events, earnings, tariffs, Fed decisions, or anything that may have happened after the data below was fetched. If the answer isn't clearly in the data, search before responding.
-
-You help swing traders analyze setups, manage positions, and understand market conditions. You have access to the user's live data below.
+  return `Today is ${today}. The user's live data:
 
 ${posSection}
 
@@ -681,16 +804,7 @@ ${tickerNewsSection}
 
 ${newsAPISection}
 
-${candleSection}
-
-STYLE RULES:
-- Be concise and specific. Reference the actual data when relevant.
-- NEVER use markdown headers (##, ###), horizontal rules (---), or emojis. Ever. Not even one.
-- Use **bold** only for key tickers, numbers, or terms. No decorative bold.
-- Use plain label lines to group content (e.g. "Bullish catalysts:" not "### Bullish Catalysts 🟢").
-- Use bullet points or numbered lists for multiple items.
-- One financial disclaimer max per response, only if truly warranted. Never repeat generic warnings.
-- Traders want signal, not noise. Write like a Bloomberg analyst, not a blog post.`;
+${candleSection}`;
 }
 
 export async function* streamChat(
@@ -703,63 +817,44 @@ export async function* streamChat(
   }
 
   const client = getClient();
-  const systemPrompt = buildChatSystemPrompt(ctx);
 
-  // Agentic loop: Claude may call the web_search tool 1-3× before producing a final answer.
-  // Each iteration is non-streaming; the final text is yielded in one chunk once ready.
-  // This lets Claude fetch live news (tariff deals, earnings beats, etc.) the static feed missed.
+  // System prompt as two blocks: frozen persona first (stable prefix), live data second.
+  const systemBlocks = [
+    { type: 'text' as const, text: CHAT_PERSONA, cache_control: { type: 'ephemeral' as const } },
+    { type: 'text' as const, text: buildChatDataSection(ctx) },
+  ];
 
   // Keep only the last 12 messages (6 turns) to cap context growth in long sessions.
   const recentMessages = messages.slice(-12);
-  let currentMessages: any[] = recentMessages.map(m => ({ role: m.role, content: m.content }));
+  const currentMessages: Anthropic.MessageParam[] = recentMessages.map(m => ({ role: m.role, content: m.content }));
 
-  // Cache all conversation history except the latest user message — each new turn only
-  // pays for the new exchange; prior turns hit the cache at 0.1× token cost.
-  if (currentMessages.length >= 2) {
-    const idx = currentMessages.length - 2;
-    const prev = currentMessages[idx];
-    if (typeof prev.content === 'string') {
-      currentMessages[idx] = {
-        ...prev,
-        content: [{ type: 'text', text: prev.content, cache_control: { type: 'ephemeral' } }],
-      };
-    }
-  }
-
-  for (let iter = 0; iter < 4; iter++) {
-    const response = await (client.messages.create as Function)({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      system: systemPrompt,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+  // Web search runs server-side: the API executes searches itself and pauses with
+  // stop_reason "pause_turn" if it hits the server-side iteration limit — re-send
+  // the assistant turn to resume. The final text is yielded once complete.
+  for (let iter = 0; iter < 5; iter++) {
+    const response = await client.messages.create({
+      model: ANALYSIS_MODEL,
+      max_tokens: 8000,
+      thinking: { type: 'adaptive' },
+      system: systemBlocks,
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 } as any],
       messages: currentMessages,
     });
 
-    // Not a tool call → final answer
-    if (response.stop_reason !== 'tool_use') {
-      for (const block of response.content as any[]) {
-        if (block.type === 'text') yield block.text;
-      }
-      return;
+    if (response.stop_reason === 'pause_turn') {
+      currentMessages.push({ role: 'assistant', content: response.content });
+      continue;
     }
 
-    // Web search was invoked — update history and loop
-    const toolUseBlocks = (response.content as any[]).filter(b => b.type === 'tool_use');
-    const searchResultBlocks = (response.content as any[]).filter(
-      b => b.type === 'web_search_result_20250305'
-    );
-
-    currentMessages.push({ role: 'assistant', content: response.content });
-
-    const toolResults = toolUseBlocks.map((tb: any) => ({
-      type: 'tool_result',
-      tool_use_id: tb.id,
-      content: searchResultBlocks.length > 0
-        ? searchResultBlocks
-        : [{ type: 'text', text: 'No results found.' }],
-    }));
-
-    currentMessages.push({ role: 'user', content: toolResults });
+    let yielded = false;
+    for (const block of response.content) {
+      if (block.type === 'text' && block.text.trim()) {
+        yield block.text;
+        yielded = true;
+      }
+    }
+    if (!yielded) yield "I couldn't complete my response. Please try again.";
+    return;
   }
 
   yield "I searched the web but couldn't complete my response. Please try again.";
@@ -805,15 +900,15 @@ Evaluate this position and return your verdict as JSON.`;
 
   try {
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      model: ANALYSIS_MODEL,
+      max_tokens: 2048,
+      thinking: { type: 'adaptive' },
       system: buildPositionPrompt(),
       messages: [{ role: 'user', content: userMessage }],
+      output_config: { format: POSITION_OUTPUT_FORMAT },
     });
 
-    const raw = msg.content[0].type === 'text' ? msg.content[0].text : '';
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const parsed = JSON.parse(cleaned) as PositionUpdate;
+    const parsed = JSON.parse(responseText(msg)) as PositionUpdate;
 
     if (parsed.priceChange && !parsed.priceChange.startsWith('+') && !parsed.priceChange.startsWith('-')) {
       parsed.priceChange = (priceChange >= 0 ? '+' : '') + priceChange.toFixed(2) + '%';

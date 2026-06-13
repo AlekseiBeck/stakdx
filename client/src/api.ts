@@ -257,6 +257,8 @@ export interface ChatSession {
   id: string;
   user_id: string;
   title: string;
+  is_research?: boolean;
+  ticker?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -288,6 +290,56 @@ export async function renameChatSession(id: string, title: string): Promise<void
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify({ title }),
   });
+}
+
+// Update research flag / ticker tag. Returns the updated session, or null on failure
+// (e.g. the research-mode DB migration hasn't been run yet).
+export async function updateChatSessionResearch(
+  id: string,
+  fields: { is_research?: boolean; ticker?: string | null }
+): Promise<ChatSession | null> {
+  try {
+    const headers = await authHeaders();
+    const res = await fetch(`${BASE}/chat/sessions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(fields),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.session ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Research chart ───────────────────────────────────────────────────────────
+
+export type ChartRange = 'max' | '2y' | '1y' | 'ytd' | '1m' | '1w' | '1d' | 'now';
+
+export interface ChartCandle {
+  t: string;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+}
+
+export async function fetchChartData(
+  ticker: string,
+  range: ChartRange
+): Promise<{ ticker: string; range: ChartRange; candles: ChartCandle[] }> {
+  return get(`/chart/${encodeURIComponent(ticker)}?range=${range}`);
+}
+
+export async function fetchWatchlist(): Promise<string[]> {
+  try {
+    const data = await get('/watchlist');
+    return data.tickers ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function deleteChatSession(id: string): Promise<void> {

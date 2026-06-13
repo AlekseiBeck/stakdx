@@ -7,9 +7,9 @@ interface Props {
 }
 
 const OPTIONS: { value: ScanMode; label: string; activeClass: string }[] = [
-  { value: 'long', label: 'LONG', activeClass: 'bg-emerald-600 text-white' },
-  { value: 'both', label: 'BOTH', activeClass: 'bg-[#3a3a3f] text-gray-100' },
-  { value: 'short', label: 'SHORT', activeClass: 'bg-red-600 text-white' },
+  { value: 'long', label: 'LONG', activeClass: 'bg-gradient-to-b from-emerald-500 to-emerald-600 text-white shadow-[0_2px_10px_-2px_rgba(16,185,129,0.5)]' },
+  { value: 'both', label: 'BOTH', activeClass: 'bg-gradient-to-b from-[#44444a] to-[#36363b] text-gray-100 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.5)]' },
+  { value: 'short', label: 'SHORT', activeClass: 'bg-gradient-to-b from-red-500 to-red-600 text-white shadow-[0_2px_10px_-2px_rgba(239,68,68,0.5)]' },
 ];
 
 export default function ModeSwitcher({ mode, onChange }: Props) {

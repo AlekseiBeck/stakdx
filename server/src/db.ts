@@ -246,6 +246,8 @@ export interface ChatSession {
   id: string;
   user_id: string;
   title: string;
+  is_research?: boolean;
+  ticker?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -290,6 +292,43 @@ export async function updateChatSessionTitle(userId: string, sessionId: string, 
     .update({ title, updated_at: new Date().toISOString() })
     .eq('id', sessionId)
     .eq('user_id', userId);
+}
+
+// Update research flag / ticker tag. Un-marking research bumps updated_at to now
+// (per product spec: the chat re-dates to the current time). Marking research or
+// changing the ticker preserves updated_at so the chat keeps its place in history.
+export async function updateChatSessionResearch(
+  userId: string,
+  sessionId: string,
+  fields: { is_research?: boolean; ticker?: string | null }
+): Promise<ChatSession | null> {
+  const db = getClient();
+  if (!db) return null;
+
+  const patch: Record<string, unknown> = {};
+  if (fields.is_research !== undefined) {
+    patch.is_research = fields.is_research;
+    if (!fields.is_research) {
+      patch.ticker = null;
+      patch.updated_at = new Date().toISOString();
+    }
+  }
+  if (fields.ticker !== undefined && fields.is_research !== false) {
+    patch.ticker = fields.ticker;
+  }
+
+  const { data, error } = await db
+    .from('chat_sessions')
+    .update(patch)
+    .eq('id', sessionId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+  if (error) {
+    console.error('DB updateChatSessionResearch error:', error.message);
+    return null;
+  }
+  return data as ChatSession;
 }
 
 export async function deleteChatSession(userId: string, sessionId: string): Promise<void> {

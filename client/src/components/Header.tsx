@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { RadioButton, CircleNotch, SignOut } from '@phosphor-icons/react';
 import ModeSwitcher from './ModeSwitcher';
 import { ScanMode } from '../types';
 
@@ -68,17 +69,8 @@ export default function Header({
     minute: '2-digit',
   });
 
-  const scanIcon = (size = 'w-4 h-4') => (
-    <svg className={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
-    </svg>
-  );
-
-  const spinIcon = (size = 'w-4 h-4') => (
-    <svg className={`${size} spin-slow`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-    </svg>
-  );
+  const scanIcon = (size = 16) => <RadioButton size={size} weight="duotone" />;
+  const spinIcon = (size = 16) => <CircleNotch size={size} weight="bold" className="spin-slow" />;
 
   return (
     <header className="border-b border-[#222225] bg-[#0c0c0d]/95 backdrop-blur-md sticky top-0 z-50 safe-top">
@@ -88,7 +80,7 @@ export default function Header({
         {/* Logo */}
         <div className="flex items-center gap-2 flex-shrink-0 pr-2 border-r border-[#222225]">
           <img src="/stakd-logo.png" className="h-6 w-auto rounded-md" alt="" />
-          <span className="text-base font-bold tracking-tight text-white">Stakdx</span>
+          <span className="font-display text-base font-bold tracking-tight text-white">Stakdx</span>
         </div>
         <div className="flex-shrink-0"><ModeSwitcher mode={mode} onChange={onModeChange} /></div>
 
@@ -100,13 +92,13 @@ export default function Header({
               value={buyingPower}
               onChange={(e) => onBuyingPowerChange(e.target.value.replace(/[^0-9.,]/g, ''))}
               placeholder="Buying power"
-              className="w-32 bg-[#141415] border border-[#222225] rounded-lg pl-6 pr-3 py-1.5 text-white mono text-xs focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-700"
+              className="w-32 bg-[#141415] border border-[#222225] rounded-lg pl-6 pr-3 py-1.5 text-white mono text-xs focus:outline-none focus:border-amber-500/60 focus:shadow-[0_0_0_3px_rgba(245,158,11,0.1)] transition-all placeholder-gray-700"
             />
           </div>
         </div>
 
         <button onClick={onScan} disabled={isScanning} className="btn-primary text-sm flex-shrink-0 py-2">
-          {isScanning ? <>{spinIcon('w-3.5 h-3.5')} Scanning...</> : <>{scanIcon('w-3.5 h-3.5')} Run Scan</>}
+          {isScanning ? <>{spinIcon(14)} Scanning...</> : <>{scanIcon(14)} Run Scan</>}
         </button>
 
         <div className="flex-1" />
@@ -153,9 +145,7 @@ export default function Header({
             <div className="text-xs text-gray-500 truncate max-w-[120px]">{userEmail}</div>
           </div>
           <button onClick={onSignOut} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-950/30 transition-all" title="Sign out">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-            </svg>
+            <SignOut size={16} weight="bold" />
           </button>
         </div>
       </div>
@@ -167,7 +157,7 @@ export default function Header({
         <div className="flex items-center gap-2 px-3 pt-2 pb-2">
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <img src="/stakd-logo.png" className="h-5 w-auto rounded-md" alt="" />
-            <span className="text-sm font-bold tracking-tight text-white">Stakdx</span>
+            <span className="font-display text-sm font-bold tracking-tight text-white">Stakdx</span>
           </div>
           <div className="flex-shrink-0">
             <ModeSwitcher mode={mode} onChange={onModeChange} />
@@ -185,9 +175,7 @@ export default function Header({
             className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#1e1e20] border border-[#2a2a2c] text-gray-400 hover:text-red-400 hover:bg-red-950/20 active:scale-95 transition-all flex-shrink-0"
             title="Sign out"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-            </svg>
+            <SignOut size={16} weight="bold" />
           </button>
         </div>
 
@@ -199,8 +187,8 @@ export default function Header({
             className="btn-primary text-sm flex-shrink-0 py-2 px-4 min-h-[40px]"
           >
             {isScanning
-              ? <>{spinIcon('w-4 h-4')} Scanning…</>
-              : <>{scanIcon('w-4 h-4')} Run Scan</>
+              ? <>{spinIcon(16)} Scanning…</>
+              : <>{scanIcon(16)} Run Scan</>
             }
           </button>
 
@@ -212,7 +200,7 @@ export default function Header({
               value={buyingPower}
               onChange={(e) => onBuyingPowerChange(e.target.value.replace(/[^0-9.,]/g, ''))}
               placeholder="Buying power"
-              className="w-full bg-[#141415] border border-[#222225] rounded-lg pl-6 pr-2 py-2 text-white mono text-xs focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-700 min-h-[40px]"
+              className="w-full bg-[#141415] border border-[#222225] rounded-lg pl-6 pr-2 py-2 text-white mono text-xs focus:outline-none focus:border-amber-500/60 focus:shadow-[0_0_0_3px_rgba(245,158,11,0.1)] transition-all placeholder-gray-700 min-h-[40px]"
             />
           </div>
 

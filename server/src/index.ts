@@ -18,7 +18,10 @@ import {
   fetchWeeklyCandles,
   fetchPremarketCandles,
   computeVWAPMap,
+  fetchChartCandles,
+  CHART_RANGES,
 } from './alpaca';
+import type { ChartRange } from './alpaca';
 import {
   analyzeCandlesWithClaude,
   analyzeBatchWithClaude,
@@ -51,6 +54,7 @@ import {
   listChatSessions,
   createChatSession,
   updateChatSessionTitle,
+  updateChatSessionResearch,
   deleteChatSession,
   getChatMessages,
   appendChatMessages,
@@ -389,6 +393,26 @@ app.get('/api/prices', requireAuth, async (req: AuthRequest, res) => {
   const tickers = tickersParam.split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
   const prices = await fetchPricesForTickers(tickers);
   return res.json({ prices });
+});
+
+// ─── GET /api/chart/:ticker — OHLCV candles for the research-mode chart ──────
+app.get('/api/chart/:ticker', requireAuth, async (req: AuthRequest, res) => {
+  const ticker = sanitizeTicker(req.params.ticker);
+  if (!ticker) return res.status(400).json({ error: 'Invalid ticker symbol' });
+
+  const range = (req.query.range as string | undefined)?.toLowerCase() ?? '2y';
+  if (!CHART_RANGES.includes(range as ChartRange)) {
+    return res.status(400).json({ error: `range must be one of: ${CHART_RANGES.join(', ')}` });
+  }
+
+  const candles = await fetchChartCandles(ticker, range as ChartRange);
+  if (!candles) return res.status(404).json({ error: `No chart data for ${ticker}` });
+  return res.json({ ticker, range, candles });
+});
+
+// ─── GET /api/watchlist — ticker universe (used for client-side ticker detection)
+app.get('/api/watchlist', requireAuth, (_req, res) => {
+  return res.json({ tickers: WATCHLIST });
 });
 
 // ─── GET /api/positions ───────────────────────────────────────────────────────
@@ -764,12 +788,52 @@ app.post('/api/chat/sessions', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// PATCH /api/chat/sessions/:id — rename session
+// PATCH /api/chat/sessions/:id — rename session and/or update research flag + ticker tag
 app.patch('/api/chat/sessions/:id', requireAuth, async (req: AuthRequest, res) => {
   if (!hasDatabase()) return res.status(503).json({ error: 'Database not configured' });
-  const { title } = req.body as { title?: unknown };
-  if (!title || typeof title !== 'string') return res.status(400).json({ error: 'title must be a non-empty string' });
-  await updateChatSessionTitle(req.userId!, req.params.id, title.slice(0, 100));
+  const { title, is_research, ticker } = req.body as {
+    title?: unknown;
+    is_research?: unknown;
+    ticker?: unknown;
+  };
+
+  const hasResearchPatch = is_research !== undefined || ticker !== undefined;
+  if (title === undefined && !hasResearchPatch) {
+    return res.status(400).json({ error: 'Nothing to update' });
+  }
+
+  if (title !== undefined) {
+    if (!title || typeof title !== 'string') return res.status(400).json({ error: 'title must be a non-empty string' });
+    await updateChatSessionTitle(req.userId!, req.params.id, title.slice(0, 100));
+  }
+
+  if (hasResearchPatch) {
+    if (is_research !== undefined && typeof is_research !== 'boolean') {
+      return res.status(400).json({ error: 'is_research must be a boolean' });
+    }
+    let cleanTicker: string | null | undefined = undefined;
+    if (ticker !== undefined) {
+      if (ticker === null || ticker === '') {
+        cleanTicker = null;
+      } else if (typeof ticker === 'string') {
+        cleanTicker = sanitizeTicker(ticker);
+        if (!cleanTicker) return res.status(400).json({ error: 'Invalid ticker symbol' });
+      } else {
+        return res.status(400).json({ error: 'ticker must be a string or null' });
+      }
+    }
+    const session = await updateChatSessionResearch(req.userId!, req.params.id, {
+      is_research: is_research as boolean | undefined,
+      ticker: cleanTicker,
+    });
+    if (!session) {
+      return res.status(500).json({
+        error: 'Failed to update research fields — has the research-mode migration been run? (see server/migrations)',
+      });
+    }
+    return res.json({ success: true, session });
+  }
+
   return res.json({ success: true });
 });
 

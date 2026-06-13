@@ -566,4 +566,65 @@ export function summarizeWeeklyCandles(ticker: string, candles: Candle[]): strin
   return `${ticker} weekly(3wk): ${lines.join(' | ')}`;
 }
 
+// ─── Chart data for the research-mode stock chart ────────────────────────────
+
+export type ChartRange = 'max' | '2y' | '1y' | 'ytd' | '1m' | '1w' | '1d' | 'now';
+
+export const CHART_RANGES: ChartRange[] = ['max', '2y', '1y', 'ytd', '1m', '1w', '1d', 'now'];
+
+// timeframe granularity per range; lastSessionOnly trims to the most recent trading day
+const CHART_RANGE_CONFIG: Record<ChartRange, { timeframe: string; daysBack: number | 'ytd' | 'max'; lastSessionOnly?: boolean }> = {
+  max: { timeframe: '1Week', daysBack: 'max' },
+  '2y': { timeframe: '1Day', daysBack: 731 },
+  '1y': { timeframe: '1Day', daysBack: 366 },
+  ytd: { timeframe: '1Day', daysBack: 'ytd' },
+  '1m': { timeframe: '1Hour', daysBack: 32 },
+  '1w': { timeframe: '30Min', daysBack: 8 },
+  '1d': { timeframe: '5Min', daysBack: 5, lastSessionOnly: true },
+  now: { timeframe: '1Min', daysBack: 5, lastSessionOnly: true },
+};
+
+export async function fetchChartCandles(ticker: string, range: ChartRange): Promise<Candle[] | null> {
+  if (!hasAlpacaKeys()) return null;
+
+  const endpoint = process.env.ALPACA_ENDPOINT || 'https://data.alpaca.markets';
+  const cfg = CHART_RANGE_CONFIG[range];
+
+  const start = new Date();
+  if (cfg.daysBack === 'max') {
+    start.setFullYear(2000, 0, 1);
+  } else if (cfg.daysBack === 'ytd') {
+    start.setMonth(0, 1);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start.setDate(start.getDate() - cfg.daysBack);
+  }
+
+  try {
+    const response = await axios.get(`${endpoint}/v2/stocks/bars`, {
+      headers: getAlpacaHeaders(),
+      params: {
+        symbols: ticker,
+        timeframe: cfg.timeframe,
+        start: start.toISOString(),
+        limit: 10000,
+        feed: 'iex',
+        adjustment: 'split',
+      },
+    });
+
+    const bars = (response.data.bars as Record<string, Candle[]>)[ticker];
+    if (!bars || bars.length === 0) return null;
+
+    if (cfg.lastSessionOnly) {
+      const lastDate = bars[bars.length - 1].t.split('T')[0];
+      return bars.filter(c => c.t.startsWith(lastDate));
+    }
+    return bars;
+  } catch (err) {
+    console.error(`Alpaca chart fetch error for ${ticker} (${range}):`, err);
+    return null;
+  }
+}
+
 export { WATCHLIST, hasAlpacaKeys };

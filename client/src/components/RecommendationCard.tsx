@@ -35,17 +35,34 @@ function DirectionBadge({ direction }: { direction: TradeRecommendation['directi
 }
 
 function ConfidenceScore({ value }: { value: number }) {
-  const color =
-    value >= 80 ? 'text-emerald-400 border-emerald-700/50 bg-emerald-900/30' :
-    value >= 65 ? 'text-yellow-400 border-yellow-700/50 bg-yellow-900/20' :
-    'text-orange-400 border-orange-700/50 bg-orange-900/20';
+  const [stroke, text] =
+    value >= 80 ? ['#34d399', 'text-emerald-400'] :
+    value >= 65 ? ['#facc15', 'text-yellow-400'] :
+    ['#fb923c', 'text-orange-400'];
+  const C = 2 * Math.PI * 14;
 
   return (
-    <span className={`mono text-sm font-bold px-2 py-0.5 rounded border ${color}`}>
-      {value}
-    </span>
+    <div className="relative w-9 h-9 flex-shrink-0" title={`Confidence ${value}/100`}>
+      <svg viewBox="0 0 36 36" className="w-9 h-9 -rotate-90">
+        <circle cx="18" cy="18" r="14" fill="none" stroke="#222225" strokeWidth="3.5" />
+        <circle
+          cx="18" cy="18" r="14" fill="none" stroke={stroke} strokeWidth="3.5"
+          strokeDasharray={`${(value / 100) * C} ${C}`} strokeLinecap="round"
+        />
+      </svg>
+      <span className={`absolute inset-0 flex items-center justify-center mono text-[10px] font-bold ${text}`}>
+        {value}
+      </span>
+    </div>
   );
 }
+
+const ACCENT: Record<TradeRecommendation['direction'], string> = {
+  LONG: 'bg-emerald-500/70',
+  SHORT: 'bg-red-500/70',
+  CALL: 'bg-amber-500/70',
+  PUT: 'bg-purple-500/70',
+};
 
 
 function calcRR(rec: TradeRecommendation): string | null {
@@ -77,10 +94,12 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
 
   return (
     <div
-      className={`card-elevated fade-in-up cursor-pointer transition-all duration-200 hover:border-[#333336] ${expanded ? 'border-[#333336]' : ''}`}
+      className={`card-elevated fade-in-up relative overflow-hidden cursor-pointer transition-all duration-200 hover:border-[#3a3a3f] hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-10px_rgba(0,0,0,0.7)] ${expanded ? 'border-[#3a3a3f]' : ''}`}
       style={{ animationDelay: `${Math.min(index * 60, 400)}ms`, opacity: 0 }}
       onClick={() => setExpanded((v) => !v)}
     >
+      {/* Direction accent bar */}
+      <span className={`absolute left-0 top-0 bottom-0 w-[3px] ${ACCENT[rec.direction]}`} />
       {/* Card header */}
       <div className="px-4 pt-4 pb-3">
         {/* Top row: ticker + direction + confidence */}
