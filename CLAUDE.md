@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## What StakdX Is
+
+StakdX is an AI co-pilot for retail **swing / short-term traders** — a single dashboard that finds setups, researches them, and tracks the resulting positions through to exit. It pairs Claude's reasoning with live market data (Alpaca), fundamental/calendar data (Finnhub), news (NewsAPI), and crowd sentiment (Reddit, StockTwits) so a trader can go from "what's worth trading today?" to a sized, risk-defined plan without leaving the app. It is a research and decision-support tool, not an autonomous trading bot — every order is user-initiated, and live execution is paper-only.
+
+What a user can do with it:
+
+- **Run an AI market scan.** One click scores a ~240-ticker universe locally, takes the top 30, enriches them with multi-source data, and has Claude return ranked trade ideas — each a complete plan: direction (LONG/SHORT/CALL/PUT), confidence, entry zone, stop-loss, target, timeframe, chart pattern, position size, max risk, potential gain, and social sentiment. A LONG / BOTH / SHORT toggle biases the scan direction.
+- **Research any stock in AI chat.** A Bloomberg-analyst-style chat (web-search-enabled) answers free-form questions. Flagging a chat as "research" tags it to a ticker and pins an interactive TradingView candlestick+volume chart (MAX→NOW ranges, with a resizable / repositionable chart-vs-chat layout); chat history persists per-user and groups research chats into per-ticker folders.
+- **Track open positions.** Log a position (entry, direction, stop, target); the app shows live price and net P/L and gives an AI **HOLD / SELL / CAUTION** verdict per position. Web-push notifications fire when price crosses the stop or target.
+- **Paper trade.** Connect an Alpaca paper account (API keys AES-256-GCM encrypted at rest) to place and cancel real paper orders and view live account balances, buying power, and broker positions.
+- **Stay on top of news.** Aggregated market-wide and per-ticker headlines from Finnhub, NewsAPI, and Alpaca, plus an earnings/economic calendar feed.
+
+It's an installable PWA (offline shell, push, mobile 4-tab nav) with per-user data isolated behind Supabase auth + row-level security. With no `ANTHROPIC_API_KEY` / `ALPACA_API_KEY` present it runs in a self-contained **demo mode** on mock data.
+
 ## Commands
 
 ```bash
