@@ -9,6 +9,7 @@ A full-stack swing trading dashboard powered by Claude AI, Alpaca Markets, and S
 - **AI Market Scan** — Screens 240+ tickers, surfaces highest-conviction LONG / SHORT / CALL / PUT setups with entry zones, stops, targets, and confidence scores. Two parallel Claude calls stream results back in batches.
 - **AI Trading Chat** — Streaming chat with real-time web search (Anthropic `web_search` tool). Knows your open positions, live prices, candle summaries, and latest news. Persistent session history stored in Supabase.
 - **Chat History** — Previous conversations saved per user with a sidebar for quick access. Auto-titled from the first message.
+- **Research Mode** — Flag a chat to a ticker to pin an interactive TradingView candlestick + volume chart above the conversation; research chats group into per-ticker folders in the history sidebar.
 - **Stop / Target Alerts** — Push notifications fire the moment a position hits its stop loss or profit target (iOS PWA + Android Chrome).
 - **Position Tracker** — Log trades, get live AI HOLD / SELL / CAUTION verdicts, track paper P&L.
 - **Paper Trading** — Execute trades directly against Alpaca's paper brokerage with one tap.
@@ -23,7 +24,7 @@ A full-stack swing trading dashboard powered by Claude AI, Alpaca Markets, and S
 |---|---|
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS |
 | Backend | Node.js, Express, TypeScript |
-| AI | Claude Sonnet 4.6 (Anthropic) · web_search_20250305 built-in tool |
+| AI | Claude Opus 4.8 (scan) · Sonnet 4.6 (chat + verdicts) · Haiku 4.5 (fast tasks) · `web_search_20260209` built-in tool |
 | Market Data | Alpaca Markets API |
 | Sentiment | StockTwits · Reddit |
 | News | Alpaca News · Finnhub · NewsAPI.org |
@@ -116,10 +117,13 @@ create table public.chat_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   title text not null default 'New Chat',
+  is_research boolean not null default false,  -- research-mode flag
+  ticker text,                                 -- stock tag for research chats, e.g. 'NVDA'
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create index on public.chat_sessions (user_id, updated_at desc);
+create index chat_sessions_research_idx on public.chat_sessions (user_id, ticker) where ticker is not null;
 alter table public.chat_sessions enable row level security;
 create policy "Users own chat sessions" on public.chat_sessions for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);

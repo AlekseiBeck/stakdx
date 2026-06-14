@@ -62,7 +62,8 @@ Full-stack swing trading dashboard: React frontend, Express backend, connected t
 - **`components/ChatPanel.tsx`** — AI chat with persistent history sidebar. On desktop the sidebar is always visible (left column); on mobile it slides in via a hamburger toggle. Sessions are auto-created from the first message (title = truncated first message). Messages are saved to Supabase after each AI response.
 - **`components/Header.tsx`** — Top nav. Desktop: single row. Mobile: two rows — row 1 has logo + LONG/BOTH/SHORT + market status + sign out; row 2 has Run Scan + buying power input + Paper button.
 - **`components/ModeSwitcher.tsx`** — LONG / BOTH / SHORT pill toggle for scan direction.
-- Other components: `RecommendationsTable`, `RecommendationCard`, `PositionsPanel`, `PaperTradingPanel`, `ConnectBrokerageModal`, `ExecuteTradeModal`, `NewsPanel`.
+- **`components/landing/ParticleWave.tsx`** — Three.js/WebGL animated particle background for the landing hero. Falls back to a CSS `.aurora-fallback` gradient when WebGL can't initialize, and renders a single static frame under `prefers-reduced-motion`.
+- Other components: `RecommendationsTable`, `RecommendationCard`, `PositionsPanel`, `PaperTradingPanel`, `AccountSettingsModal`, `ConnectBrokerageForm`, `AddPositionModal`, `ExecuteTradeModal`, `StockChart`, `NewsPanel`.
 
 ### Key Data Flows
 

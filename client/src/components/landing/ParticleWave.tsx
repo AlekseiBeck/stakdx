@@ -1,13 +1,15 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 /**
  * Animated particle-wave background for the landing hero.
  * A grid of points undulates like a market surface; mostly dim gold with
  * sparse bright amber/emerald "signal" particles. Respects reduced motion.
+ * Falls back to a CSS gradient (.aurora-fallback) when WebGL is unavailable.
  */
 export default function ParticleWave() {
   const mountRef = useRef<HTMLDivElement>(null);
+  const [fallback, setFallback] = useState(false);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -27,11 +29,19 @@ export default function ParticleWave() {
     camera.position.set(0, 4.6, 12);
     camera.lookAt(0, -0.5, 0);
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: 'low-power',
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'low-power',
+      });
+    } catch {
+      // WebGL unavailable (hardware accel off, GPU blocklisted, RDP/VM) —
+      // nothing has been appended or registered yet, so just show the CSS fallback.
+      setFallback(true);
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.domElement.style.position = 'absolute';
@@ -142,6 +152,10 @@ export default function ParticleWave() {
       mount.removeChild(renderer.domElement);
     };
   }, []);
+
+  if (fallback) {
+    return <div className="absolute inset-0 aurora-fallback" aria-hidden="true" />;
+  }
 
   return <div ref={mountRef} className="absolute inset-0" aria-hidden="true" />;
 }
