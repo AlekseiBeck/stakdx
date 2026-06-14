@@ -25,12 +25,16 @@ interface StockChartProps {
   ticker: string;
   range: ChartRange;
   onRangeChange: (r: ChartRange) => void;
+  fill?: boolean;            // fill the parent container (sized by the resizable split)
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+  showCollapse?: boolean;    // collapse-to-header only makes sense in vertical layouts
 }
 
-export default function StockChart({ ticker, range, onRangeChange }: StockChartProps) {
+export default function StockChart({ ticker, range, onRangeChange, fill = false, collapsed, onToggleCollapse, showCollapse = true }: StockChartProps) {
+  const filling = fill && !collapsed;
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastCandle, setLastCandle] = useState<ChartCandle | null>(null);
@@ -119,10 +123,23 @@ export default function StockChart({ ticker, range, onRangeChange }: StockChartP
     };
   }, [ticker, range, collapsed]);
 
+  // Keep the chart filled whenever its container resizes (layout change or drag-resize)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || collapsed) return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => chartRef.current?.timeScale().fitContent());
+    });
+    ro.observe(el);
+    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
+  }, [collapsed, filling]);
+
   const up = changePct != null && changePct >= 0;
 
   return (
-    <div className="flex-shrink-0 border-b border-[#222225] bg-[#0e0e0f]">
+    <div className={`bg-[#0e0e0f] ${filling ? 'flex-1 min-h-0 flex flex-col' : 'flex-shrink-0'}`}>
       {/* Chart header */}
       <div className="flex items-center gap-2.5 px-4 h-10">
         <span className="mono text-sm font-bold text-white">{ticker}</span>
@@ -153,13 +170,15 @@ export default function StockChart({ ticker, range, onRangeChange }: StockChartP
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setCollapsed(c => !c)}
-          className="w-6 h-6 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors"
-          title={collapsed ? 'Show chart' : 'Hide chart'}
-        >
-          {collapsed ? <CaretDown size={13} weight="bold" /> : <CaretUp size={13} weight="bold" />}
-        </button>
+        {showCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className="w-6 h-6 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors"
+            title={collapsed ? 'Show chart' : 'Hide chart'}
+          >
+            {collapsed ? <CaretDown size={13} weight="bold" /> : <CaretUp size={13} weight="bold" />}
+          </button>
+        )}
       </div>
 
       {/* Mobile range pills */}
@@ -181,8 +200,8 @@ export default function StockChart({ ticker, range, onRangeChange }: StockChartP
 
       {/* Chart body */}
       {!collapsed && (
-        <div className="relative px-1 pb-1">
-          <div ref={containerRef} className="h-[260px] w-full" />
+        <div className={`relative px-1 pb-1 ${filling ? 'flex-1 min-h-0' : ''}`}>
+          <div ref={containerRef} className={`w-full ${filling ? 'h-full' : 'h-[260px]'}`} />
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-[#0e0e0f]/70">
               <span className="text-xs text-gray-600 mono">Loading {ticker}…</span>

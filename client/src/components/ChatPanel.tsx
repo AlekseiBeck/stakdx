@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   ChatCircleDots, Plus, List, X, PaperPlaneTilt, Flask, CaretRight,
-  CaretLeft, ChartLineUp, Check, PencilSimple,
+  CaretLeft, ChartLineUp, Check, PencilSimple, Layout,
 } from '@phosphor-icons/react';
 import { TradeRecommendation, NewsItem, Position } from '../types';
 import {
@@ -46,6 +46,24 @@ const SUGGESTIONS = [
   'Analyze my open positions',
   'Best setups from the latest scan',
   'Should I hold NVDA through earnings?',
+];
+
+// ─── Research-mode chart/chat layout ─────────────────────────────────────────
+// One flex-direction drives all four arrangements (chart is always the first child).
+type ChartLayout = 'col' | 'col-reverse' | 'row' | 'row-reverse';
+
+const LAYOUT_FLEX: Record<ChartLayout, string> = {
+  col: 'flex-col', 'col-reverse': 'flex-col-reverse', row: 'flex-row', 'row-reverse': 'flex-row-reverse',
+};
+// Divider between the chart panel and the conversation (chart side facing the chat)
+const LAYOUT_DIVIDER: Record<ChartLayout, string> = {
+  col: 'border-b', 'col-reverse': 'border-t', row: 'border-r', 'row-reverse': 'border-l',
+};
+const LAYOUT_OPTIONS: { key: ChartLayout; label: string }[] = [
+  { key: 'col', label: 'Chart on top' },
+  { key: 'col-reverse', label: 'Chart on bottom' },
+  { key: 'row', label: 'Chart on left' },
+  { key: 'row-reverse', label: 'Chart on right' },
 ];
 
 // ─── Ticker + timeframe detection for research mode ──────────────────────────
@@ -150,9 +168,28 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
   const [showTickerInput, setShowTickerInput] = useState(false);
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const [folderRenameValue, setFolderRenameValue] = useState('');
+  const [chartLayout, setChartLayout] = useState<ChartLayout>(() => {
+    const saved = typeof window !== 'undefined' ? window.localStorage.getItem('stakdx-chart-layout') : null;
+    return saved === 'col' || saved === 'col-reverse' || saved === 'row' || saved === 'row-reverse' ? saved : 'col';
+  });
+  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
+  const [chartCollapsed, setChartCollapsed] = useState(false);
+  // Chart panel size as a fraction of the split, kept separately for vertical/horizontal layouts
+  const [chartFraction, setChartFraction] = useState<{ v: number; h: number }>(() => {
+    try {
+      const s = JSON.parse((typeof window !== 'undefined' && window.localStorage.getItem('stakdx-chart-fraction')) || 'null');
+      if (s && typeof s.v === 'number' && typeof s.h === 'number') return s;
+    } catch { /* ignore */ }
+    return { v: 0.4, h: 0.5 };
+  });
+  const [dragging, setDragging] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const layoutContainerRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const isHorizontal = chartLayout === 'row' || chartLayout === 'row-reverse';
 
   // Pending messages to save once streaming completes (user + assistant pair)
   const pendingSave = useRef<{ sessionId: string; msgs: Array<{ role: 'user' | 'assistant'; content: string }> } | null>(null);
@@ -173,6 +210,21 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     listChatSessions().then(setSessions);
     fetchWatchlist().then(setWatchlist);
   }, []);
+
+  // Persist the chart/chat layout preference
+  useEffect(() => {
+    try { window.localStorage.setItem('stakdx-chart-layout', chartLayout); } catch { /* ignore */ }
+  }, [chartLayout]);
+
+  // Persist the chart/chat split sizes
+  useEffect(() => {
+    try { window.localStorage.setItem('stakdx-chart-fraction', JSON.stringify(chartFraction)); } catch { /* ignore */ }
+  }, [chartFraction]);
+
+  // Collapse-to-header only applies to vertical layouts; auto-expand in side-by-side
+  useEffect(() => {
+    if (isHorizontal && chartCollapsed) setChartCollapsed(false);
+  }, [isHorizontal, chartCollapsed]);
 
   const patchSessionLocal = useCallback((updated: ChatSession) => {
     setSessions(prev => {
@@ -378,6 +430,30 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     setInput(e.target.value);
     e.target.style.height = 'auto';
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+  };
+
+  // ── Drag-to-resize the chart/chat split ──────────────────────────────────────
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    draggingRef.current = true;
+    setDragging(true);
+  };
+  const onResizeMove = (e: React.PointerEvent) => {
+    if (!draggingRef.current || !layoutContainerRef.current) return;
+    const rect = layoutContainerRef.current.getBoundingClientRect();
+    let frac: number;
+    if (chartLayout === 'row') frac = (e.clientX - rect.left) / rect.width;
+    else if (chartLayout === 'row-reverse') frac = (rect.right - e.clientX) / rect.width;
+    else if (chartLayout === 'col') frac = (e.clientY - rect.top) / rect.height;
+    else frac = (rect.bottom - e.clientY) / rect.height; // col-reverse
+    frac = Math.min(0.85, Math.max(0.15, frac));
+    setChartFraction(prev => ({ ...prev, [isHorizontal ? 'h' : 'v']: frac }));
+  };
+  const endResize = (e: React.PointerEvent) => {
+    draggingRef.current = false;
+    setDragging(false);
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
   };
 
   const toggleFolder = (key: string) => {
@@ -610,6 +686,47 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
             </form>
           )}
 
+          {/* Chart/chat layout picker (research mode only) */}
+          {researchTicker && (
+            <div className="relative flex-shrink-0">
+              <button
+                onClick={() => setLayoutMenuOpen(o => !o)}
+                title="Chart layout"
+                className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
+                  layoutMenuOpen ? 'text-amber-400 bg-amber-500/10' : 'text-gray-500 hover:text-white hover:bg-[#1e1e20]'
+                }`}
+              >
+                <Layout size={15} weight="bold" />
+              </button>
+              {layoutMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setLayoutMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1.5 z-50 p-2 rounded-lg bg-[#141415] border border-[#2a2a2c] shadow-xl shadow-black/40 grid grid-cols-[auto_auto] gap-2">
+                    {LAYOUT_OPTIONS.map(opt => (
+                      <button
+                        key={opt.key}
+                        onClick={() => { setChartLayout(opt.key); setLayoutMenuOpen(false); }}
+                        title={opt.label}
+                        className={`p-2 rounded-md border transition-colors ${
+                          chartLayout === opt.key ? 'border-amber-500/60 bg-amber-500/10' : 'border-[#222225] hover:border-[#333336]'
+                        }`}
+                      >
+                        <div className={`flex ${LAYOUT_FLEX[opt.key]} gap-1 w-16 h-12`}>
+                          <div className="flex-1 flex items-center justify-center rounded bg-[#1e1e20] border border-[#2e2e32]" title="Chart">
+                            <ChartLineUp size={14} weight="duotone" className="text-gray-400" />
+                          </div>
+                          <div className="flex-1 flex items-center justify-center rounded bg-[#1e1e20] border border-[#2e2e32]" title="Chat">
+                            <ChatCircleDots size={14} weight="duotone" className="text-gray-400" />
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <button
             onClick={toggleResearch}
             title={isResearch ? 'Unmark as research (chat moves to today)' : 'Mark as research'}
@@ -633,13 +750,50 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
           )}
         </div>
 
-        {/* Research stock chart */}
-        {researchTicker && (
-          <StockChart ticker={researchTicker} range={chartRange} onRangeChange={setChartRange} />
-        )}
+        {/* Chart + conversation, arranged per the selected layout (research mode only) */}
+        <div
+          ref={layoutContainerRef}
+          className={`flex-1 min-h-0 flex ${researchTicker ? LAYOUT_FLEX[chartLayout] : 'flex-col'} ${
+            dragging ? `select-none ${isHorizontal ? 'cursor-col-resize' : 'cursor-row-resize'}` : ''
+          }`}
+        >
+          {researchTicker && (
+            <div
+              className={`flex flex-col min-w-0 min-h-0 flex-shrink-0 ${
+                chartCollapsed ? `${LAYOUT_DIVIDER[chartLayout]} border-[#222225]` : ''
+              }`}
+              style={chartCollapsed ? undefined : { flexBasis: `${(isHorizontal ? chartFraction.h : chartFraction.v) * 100}%` }}
+            >
+              <StockChart
+                ticker={researchTicker}
+                range={chartRange}
+                onRangeChange={setChartRange}
+                fill={!chartCollapsed}
+                collapsed={chartCollapsed}
+                onToggleCollapse={() => setChartCollapsed(c => !c)}
+                showCollapse={!isHorizontal}
+              />
+            </div>
+          )}
 
+          {/* Drag-to-resize handle between the chart and the conversation */}
+          {researchTicker && !chartCollapsed && (
+            <div
+              onPointerDown={startResize}
+              onPointerMove={onResizeMove}
+              onPointerUp={endResize}
+              title="Drag to resize"
+              style={{ touchAction: 'none' }}
+              className={`flex-shrink-0 transition-colors ${
+                isHorizontal ? 'w-1.5 cursor-col-resize' : 'h-1.5 cursor-row-resize'
+              } ${dragging ? 'bg-amber-500/60' : 'bg-[#222225] hover:bg-amber-500/40'}`}
+            />
+          )}
+
+          {/* Conversation column */}
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5">
           {loadingSession ? (
             <div className="flex items-center justify-center h-full">
               <div className="flex gap-1.5">
@@ -728,6 +882,8 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
             </button>
           </div>
           <p className="hidden sm:block text-[10px] text-gray-700 mt-1.5 text-center">Enter to send · Shift+Enter for newline</p>
+        </div>
+          </div>
         </div>
       </div>
     </div>
