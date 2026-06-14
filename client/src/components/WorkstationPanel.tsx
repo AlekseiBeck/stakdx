@@ -13,7 +13,7 @@ interface WorkstationPanelProps {
 function WorkstationChart({ ticker, onRemove }: { ticker: string; onRemove: () => void }) {
   const [range, setRange] = useState<ChartRange>('1y');
   return (
-    <div className="group relative flex flex-col h-60 bg-[#0e0e0f] border border-[#222225] rounded-lg overflow-hidden">
+    <div className="group relative flex flex-col min-h-0 bg-[#0e0e0f] border border-[#222225] rounded-lg overflow-hidden">
       <button
         onClick={onRemove}
         title={`Remove ${ticker}`}
@@ -26,6 +26,7 @@ function WorkstationChart({ ticker, onRemove }: { ticker: string; onRemove: () =
         range={range}
         onRangeChange={setRange}
         fill
+        compact
         collapsed={false}
         onToggleCollapse={() => {}}
         showCollapse={false}
@@ -82,8 +83,8 @@ export default function WorkstationPanel({ tickers, onAddTicker, onRemoveTicker 
         </div>
       ) : (
         <div
-          className="flex-1 min-h-0 overflow-y-auto p-2 grid gap-2 content-start"
-          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}
+          className="flex-1 min-h-0 overflow-y-auto p-2 grid gap-2"
+          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gridAutoRows: 'minmax(220px, 1fr)' }}
         >
           {tickers.map(t => (
             <WorkstationChart key={t} ticker={t} onRemove={() => onRemoveTicker(t)} />

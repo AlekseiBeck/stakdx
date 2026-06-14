@@ -29,9 +29,10 @@ interface StockChartProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   showCollapse?: boolean;    // collapse-to-header only makes sense in vertical layouts
+  compact?: boolean;         // narrow tiles (workstation grid): move range pills to a scrollable strip so none clip
 }
 
-export default function StockChart({ ticker, range, onRangeChange, fill = false, collapsed, onToggleCollapse, showCollapse = true }: StockChartProps) {
+export default function StockChart({ ticker, range, onRangeChange, fill = false, collapsed, onToggleCollapse, showCollapse = true, compact = false }: StockChartProps) {
   const filling = fill && !collapsed;
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -155,7 +156,7 @@ export default function StockChart({ ticker, range, onRangeChange, fill = false,
           </>
         )}
         <div className="flex-1" />
-        <div className="hidden sm:flex items-center gap-0.5">
+        <div className={`${compact ? 'hidden' : 'hidden sm:flex'} items-center gap-0.5`}>
           {RANGES.map(r => (
             <button
               key={r.id}
@@ -181,9 +182,9 @@ export default function StockChart({ ticker, range, onRangeChange, fill = false,
         )}
       </div>
 
-      {/* Mobile range pills */}
+      {/* Scrollable range pills — always shown on mobile, and in compact (workstation) tiles */}
       {!collapsed && (
-        <div className="sm:hidden flex items-center gap-0.5 px-3 pb-1 overflow-x-auto">
+        <div className={`${compact ? '' : 'sm:hidden'} flex items-center gap-0.5 px-3 pb-1 overflow-x-auto`}>
           {RANGES.map(r => (
             <button
               key={r.id}
