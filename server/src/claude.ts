@@ -111,6 +111,21 @@ const MACRO_OUTPUT_FORMAT = {
   },
 };
 
+const NEWS_QUERY_OUTPUT_FORMAT = {
+  type: 'json_schema' as const,
+  schema: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'A NewsAPI /everything "q" string: the topic plus closely related stock-moving themes, joined by OR, multi-word phrases in double quotes.',
+      },
+    },
+    required: ['query'],
+    additionalProperties: false,
+  },
+};
+
 const NEWS_SCORE_OUTPUT_FORMAT = {
   type: 'json_schema' as const,
   schema: {
@@ -181,6 +196,40 @@ function responseText(msg: Anthropic.Message): string {
     if (block.type === 'text') return block.text;
   }
   return '';
+}
+
+// ─── News Search Query Expander (Claude Haiku) ───────────────────────────────
+//
+// Turns a trader's short search ("nvidia", "AI", "rate cuts") into a NewsAPI
+// boolean query that also captures closely related, stock-moving themes
+// (suppliers, sector, key products, catalysts). Falls back to the raw input
+// when no key is configured or on error so search still works.
+
+export async function expandNewsQuery(input: string): Promise<string> {
+  if (!hasAnthropicKey()) return input;
+
+  const client = getClient();
+
+  try {
+    const msg = await client.messages.create({
+      model: FAST_MODEL,
+      max_tokens: 200,
+      system:
+        'You expand a retail trader\'s news search into a NewsAPI /everything query. ' +
+        'Given a topic, ticker, or company name, return a boolean query that captures the topic ' +
+        'AND the closely related themes that move its stock price (suppliers, sector peers, key ' +
+        'products, major catalysts). Keep it focused: 3-6 OR-joined terms or phrases, with ' +
+        'multi-word phrases in double quotes. Do not over-broaden into unrelated topics.',
+      messages: [{ role: 'user', content: `Topic: ${input}` }],
+      output_config: { format: NEWS_QUERY_OUTPUT_FORMAT },
+    });
+
+    const parsed = JSON.parse(responseText(msg)) as { query: string };
+    return parsed.query?.trim() || input;
+  } catch (err) {
+    console.error('[claude] News query expansion error:', err);
+    return input;
+  }
 }
 
 // ─── Layer 1: Macro Regime Classifier (Claude Haiku) ────────────────────────

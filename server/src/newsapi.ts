@@ -4,6 +4,7 @@ export type NewsAPIArticle = {
   title: string;
   source: string;
   publishedAt: string;
+  url: string;
 };
 
 export type NewsAPIResult = {
@@ -30,7 +31,7 @@ export async function searchNews(query: string, pageSize = 5): Promise<NewsAPIAr
   try {
     const { data } = await axios.get<{
       status: string;
-      articles: Array<{ title: string; source: { name: string }; publishedAt: string }>;
+      articles: Array<{ title: string; source: { name: string }; publishedAt: string; url: string }>;
     }>('https://newsapi.org/v2/everything', {
       params: {
         q: query,
@@ -47,6 +48,7 @@ export async function searchNews(query: string, pageSize = 5): Promise<NewsAPIAr
       title: a.title,
       source: a.source?.name ?? 'Unknown',
       publishedAt: a.publishedAt,
+      url: a.url ?? '',
     }));
 
     cache.set(query, { articles, fetchedAt: Date.now() });

@@ -34,6 +34,7 @@ import {
   classifyMacroRegime,
   scoreNewsImpact,
   triageCandidates,
+  expandNewsQuery,
   streamChat,
 } from './claude';
 import { fetchFinnhubNews, fetchUpcomingEarnings, fetchEconomicCalendar } from './finnhub';
@@ -425,6 +426,46 @@ app.get('/api/news', requireAuth, async (_req, res) => {
   } catch (err) {
     console.error('[news] Error:', err);
     return res.status(500).json({ news: MOCK_NEWS, mock: true });
+  }
+});
+
+// ─── GET /api/news/search — AI-expanded free-text news search ─────────────────
+app.get('/api/news/search', requireAuth, async (req: AuthRequest, res) => {
+  const q = (req.query.q as string | undefined)?.trim();
+  if (!q) return res.status(400).json({ error: 'q query param required' });
+
+  try {
+    // Expand the query into related stock-moving themes, then search NewsAPI.
+    const expanded = await expandNewsQuery(q);
+    const articles = await searchNews(expanded, 20);
+
+    if (articles.length > 0) {
+      const news: NewsItem[] = articles.map((a, i) => ({
+        id: a.url || `${a.publishedAt}-${i}`,
+        headline: a.title,
+        summary: '',
+        source: a.source,
+        url: a.url || '#',
+        createdAt: a.publishedAt,
+        symbols: [],
+      }));
+      return res.json({ news, mock: false });
+    }
+
+    // Fallback (no NewsAPI key, or no matches): filter the existing market feed
+    // by the raw query so search stays useful in demo mode.
+    const feedRaw = await fetchNews();
+    const feed = feedRaw ?? MOCK_NEWS;
+    const lc = q.toLowerCase();
+    const filtered = feed.filter(n =>
+      n.headline.toLowerCase().includes(lc) ||
+      n.summary.toLowerCase().includes(lc) ||
+      n.symbols.some(s => s.toLowerCase().includes(lc))
+    );
+    return res.json({ news: filtered, mock: feedRaw === null });
+  } catch (err) {
+    console.error('[news/search] Error:', err);
+    return res.status(500).json({ news: [], mock: true });
   }
 });
 

@@ -221,7 +221,6 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
       {paperPositions.length > 0 && (
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#222225] bg-[#0e0e0f]">
           <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
             <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Net Unrealized P/L</span>
           </div>
           <div className="text-right">
@@ -289,8 +288,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
           {/* Paper account positions (live from Alpaca) */}
           {paperPositions.length > 0 && (
             <div className="px-5 py-3">
-              <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
+              <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-2">
                 Paper Account
               </div>
               <div className="space-y-1.5">

@@ -107,6 +107,10 @@ export async function fetchNews(): Promise<{ news: NewsItem[]; mock: boolean }> 
   return get('/news');
 }
 
+export async function searchNewsArticles(query: string): Promise<{ news: NewsItem[]; mock: boolean }> {
+  return get(`/news/search?q=${encodeURIComponent(query)}`);
+}
+
 export async function fetchPositions(): Promise<Position[]> {
   const data = await get('/positions');
   return data.positions;

@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChatCircleDots, RadioButton, Briefcase, Newspaper, CircleNotch, CaretLeft, CaretRight } from '@phosphor-icons/react';
 import Header from './components/Header';
+import ModeSwitcher from './components/ModeSwitcher';
 import RecommendationsTable from './components/RecommendationsTable';
 import PositionsPanel from './components/PositionsPanel';
 import NewsPanel from './components/NewsPanel';
 import ChatPanel from './components/ChatPanel';
 import AddPositionModal from './components/AddPositionModal';
-import ConnectBrokerageModal from './components/ConnectBrokerageModal';
-import PaperTradingPanel from './components/PaperTradingPanel';
+import AccountSettingsModal from './components/AccountSettingsModal';
 import AuthPage from './pages/AuthPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import { useAuth } from './AuthContext';
 import { TradeRecommendation, NewsItem, Position, ScanMode, BrokerageStatus, AlpacaPosition } from './types';
-import { scanStream, runScan, fetchNews, addPosition, fetchPositions, getBrokerageStatus, getBrokeragePositions, fetchLivePrices, fetchChatContext, NewsAPIResult } from './api';
+import { scanStream, runScan, fetchNews, searchNewsArticles, addPosition, fetchPositions, getBrokerageStatus, getBrokeragePositions, fetchLivePrices, fetchChatContext, NewsAPIResult } from './api';
 
 type SidePanel = 'scan' | 'positions' | 'news';
 
@@ -41,6 +41,9 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const [recommendations, setRecommendations] = useState<TradeRecommendation[]>([]);
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [newsResults, setNewsResults] = useState<NewsItem[] | null>(null);
+  const [newsQuery, setNewsQuery] = useState('');
+  const [isSearchingNews, setIsSearchingNews] = useState(false);
   const [positions, setPositions] = useState<Position[]>([]);
   const [paperPositions, setPaperPositions] = useState<AlpacaPosition[]>([]);
   const [brokerageStatus, setBrokerageStatus] = useState<BrokerageStatus>({ connected: false });
@@ -64,8 +67,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const [mobileTab, setMobileTab] = useState<'chat' | SidePanel>('chat');
   const [addPositionPrefill, setAddPositionPrefill] = useState<TradeRecommendation | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showConnectModal, setShowConnectModal] = useState(false);
-  const [showPaperPanel, setShowPaperPanel] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
 
   // ── effects ─────────────────────────────────────────────────────────────────
   const loadNews = useCallback(async () => {
@@ -181,6 +183,24 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const handleCloseModal = () => { setShowAddModal(false); setAddPositionPrefill(null); };
   const handlePositionClosed = (id: string) => setPositions(prev => prev.filter(p => p.id !== id));
 
+  const handleNewsSearch = useCallback(async (query: string) => {
+    setNewsQuery(query);
+    setIsSearchingNews(true);
+    try {
+      const r = await searchNewsArticles(query);
+      setNewsResults(r.news);
+    } catch {
+      setNewsResults([]);
+    } finally {
+      setIsSearchingNews(false);
+    }
+  }, []);
+
+  const handleClearNewsSearch = useCallback(() => {
+    setNewsQuery('');
+    setNewsResults(null);
+  }, []);
+
   const onTradeExecuted = (rec: TradeRecommendation, price: number) => {
     const stop = parseFloat(rec.stopLoss.replace(/[^0-9.]/g, '')) || undefined;
     const target = parseFloat(rec.target.replace(/[^0-9.]/g, '')) || undefined;
@@ -200,6 +220,27 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
           {scanError}
         </div>
       )}
+      {/* Scan controls */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <ModeSwitcher mode={mode} onChange={setMode} />
+        <div className="relative">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 mono text-xs pointer-events-none">$</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={buyingPower}
+            onChange={(e) => setBuyingPower(e.target.value.replace(/[^0-9.,]/g, ''))}
+            placeholder="Buying power"
+            className="w-32 bg-[#141415] border border-[#222225] rounded-lg pl-6 pr-3 py-1.5 text-white mono text-xs focus:outline-none focus:border-amber-500/60 focus:shadow-[0_0_0_3px_rgba(245,158,11,0.1)] transition-all placeholder-gray-700"
+          />
+        </div>
+        <button onClick={handleScan} disabled={isScanning} className="btn-primary text-sm py-2">
+          {isScanning
+            ? <><CircleNotch size={14} weight="bold" className="spin-slow" /> Scanning…</>
+            : <><RadioButton size={14} weight="duotone" /> Run Scan</>}
+        </button>
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-bold text-white">
@@ -210,6 +251,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
           </h2>
           <p className="text-[11px] text-gray-600 mt-0.5">
             {mode === 'both' ? 'All directions' : mode === 'long' ? 'Long / Call bias' : 'Short / Put bias'} · 1–3 day holds
+            {lastScanTime && <> · last scan {lastScanTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</>}
           </p>
         </div>
         {isMockData && recommendations.length > 0 && (
@@ -237,10 +279,20 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     />
   );
 
+  const newsContent = (
+    <NewsPanel
+      news={newsResults ?? news}
+      onSearch={handleNewsSearch}
+      onClear={handleClearNewsSearch}
+      activeQuery={newsQuery}
+      isSearching={isSearchingNews}
+    />
+  );
+
   const panelContent = (panel: SidePanel) => {
     if (panel === 'scan') return scanContent;
     if (panel === 'positions') return positionsContent;
-    return <NewsPanel news={news} />;
+    return newsContent;
   };
 
   const pillBadge = (tab: SidePanel) => {
@@ -252,19 +304,10 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   return (
     <div className="h-full flex flex-col bg-[#0c0c0d] overflow-hidden">
       <Header
-        lastScanTime={lastScanTime}
         isMockData={isMockData}
         userEmail={userEmail}
         onSignOut={signOut}
-        mode={mode}
-        onModeChange={setMode}
-        buyingPower={buyingPower}
-        onBuyingPowerChange={setBuyingPower}
-        onScan={handleScan}
-        isScanning={isScanning}
-        brokerageConnected={brokerageStatus.connected}
-        onOpenConnectModal={() => setShowConnectModal(true)}
-        onOpenPaperPanel={() => setShowPaperPanel(true)}
+        onOpenAccount={() => setShowAccount(true)}
       />
 
       {/* ── Desktop (≥1024px): chat left + sidebar right ─────────────────────── */}
@@ -415,21 +458,14 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
         />
       )}
 
-      <ConnectBrokerageModal
-        isOpen={showConnectModal}
-        onClose={() => setShowConnectModal(false)}
-        onConnected={() => { setShowConnectModal(false); loadBrokerageData(); }}
-      />
-
-      {showPaperPanel && (
-        <div
-          className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-4 sm:pb-0 pt-20 sm:pt-0"
-          onClick={() => setShowPaperPanel(false)}
-        >
-          <div className="w-full max-w-xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <PaperTradingPanel visible={showPaperPanel} onClose={() => setShowPaperPanel(false)} />
-          </div>
-        </div>
+      {showAccount && (
+        <AccountSettingsModal
+          userEmail={userEmail}
+          brokerageConnected={brokerageStatus.connected}
+          onClose={() => setShowAccount(false)}
+          onBrokerageChanged={loadBrokerageData}
+          onSignOut={signOut}
+        />
       )}
     </div>
   );
