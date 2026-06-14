@@ -248,6 +248,9 @@ export interface ChatSession {
   title: string;
   is_research?: boolean;
   ticker?: string | null;
+  is_workstation?: boolean;
+  tickers?: string[];
+  layout?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -308,7 +311,11 @@ export async function updateChatSessionResearch(
   const patch: Record<string, unknown> = {};
   if (fields.is_research !== undefined) {
     patch.is_research = fields.is_research;
-    if (!fields.is_research) {
+    if (fields.is_research) {
+      // Research and workstation are mutually exclusive — clear workstation state.
+      patch.is_workstation = false;
+      patch.tickers = [];
+    } else {
       patch.ticker = null;
       patch.updated_at = new Date().toISOString();
     }
@@ -326,6 +333,50 @@ export async function updateChatSessionResearch(
     .single();
   if (error) {
     console.error('DB updateChatSessionResearch error:', error.message);
+    return null;
+  }
+  return data as ChatSession;
+}
+
+// Update workstation flag / loaded tickers / split layout. Marking a session as a
+// workstation clears research state (the two modes are mutually exclusive). Un-marking
+// clears the tickers + layout and re-dates the chat to now (mirrors research un-mark).
+export async function updateChatSessionWorkstation(
+  userId: string,
+  sessionId: string,
+  fields: { is_workstation?: boolean; tickers?: string[]; layout?: string | null }
+): Promise<ChatSession | null> {
+  const db = getClient();
+  if (!db) return null;
+
+  const patch: Record<string, unknown> = {};
+  if (fields.is_workstation !== undefined) {
+    patch.is_workstation = fields.is_workstation;
+    if (fields.is_workstation) {
+      patch.is_research = false;
+      patch.ticker = null;
+    } else {
+      patch.tickers = [];
+      patch.layout = null;
+      patch.updated_at = new Date().toISOString();
+    }
+  }
+  if (fields.tickers !== undefined && fields.is_workstation !== false) {
+    patch.tickers = fields.tickers;
+  }
+  if (fields.layout !== undefined && fields.is_workstation !== false) {
+    patch.layout = fields.layout;
+  }
+
+  const { data, error } = await db
+    .from('chat_sessions')
+    .update(patch)
+    .eq('id', sessionId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+  if (error) {
+    console.error('DB updateChatSessionWorkstation error:', error.message);
     return null;
   }
   return data as ChatSession;

@@ -62,6 +62,7 @@ import {
   createChatSession,
   updateChatSessionTitle,
   updateChatSessionResearch,
+  updateChatSessionWorkstation,
   deleteChatSession,
   getChatMessages,
   appendChatMessages,
@@ -813,6 +814,7 @@ app.post('/api/chat/stream', requireAuth, chatBurstLimiter, chatHourLimiter, asy
       candleSummaries?: Record<string, string>;
       tickerNews?: Record<string, string[]>;
       newsAPIArticles?: NewsAPIResult[];
+      workstationTickers?: string[];
     };
   };
 
@@ -836,6 +838,7 @@ app.post('/api/chat/stream', requireAuth, chatBurstLimiter, chatHourLimiter, asy
       candleSummaries: (context?.candleSummaries ?? {}) as Record<string, string>,
       tickerNews: (context?.tickerNews ?? {}) as Record<string, string[]>,
       newsAPIArticles: (context?.newsAPIArticles ?? []) as NewsAPIResult[],
+      workstationTickers: (context?.workstationTickers ?? []) as string[],
     };
 
     for await (const chunk of streamChat(messages, ctx)) {
@@ -871,17 +874,25 @@ app.post('/api/chat/sessions', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// PATCH /api/chat/sessions/:id — rename session and/or update research flag + ticker tag
+// Split-layout tokens a workstation may persist (mirrors the client ChartLayout union).
+const WORKSTATION_LAYOUTS = ['col', 'col-reverse', 'row', 'row-reverse'];
+const MAX_WORKSTATION_TICKERS = 12;
+
+// PATCH /api/chat/sessions/:id — rename session and/or update research / workstation state
 app.patch('/api/chat/sessions/:id', requireAuth, async (req: AuthRequest, res) => {
   if (!hasDatabase()) return res.status(503).json({ error: 'Database not configured' });
-  const { title, is_research, ticker } = req.body as {
+  const { title, is_research, ticker, is_workstation, tickers, layout } = req.body as {
     title?: unknown;
     is_research?: unknown;
     ticker?: unknown;
+    is_workstation?: unknown;
+    tickers?: unknown;
+    layout?: unknown;
   };
 
   const hasResearchPatch = is_research !== undefined || ticker !== undefined;
-  if (title === undefined && !hasResearchPatch) {
+  const hasWorkstationPatch = is_workstation !== undefined || tickers !== undefined || layout !== undefined;
+  if (title === undefined && !hasResearchPatch && !hasWorkstationPatch) {
     return res.status(400).json({ error: 'Nothing to update' });
   }
 
@@ -912,6 +923,41 @@ app.patch('/api/chat/sessions/:id', requireAuth, async (req: AuthRequest, res) =
     if (!session) {
       return res.status(500).json({
         error: 'Failed to update research fields — has the research-mode migration been run? (see server/migrations)',
+      });
+    }
+    return res.json({ success: true, session });
+  }
+
+  if (hasWorkstationPatch) {
+    if (is_workstation !== undefined && typeof is_workstation !== 'boolean') {
+      return res.status(400).json({ error: 'is_workstation must be a boolean' });
+    }
+    let cleanTickers: string[] | undefined = undefined;
+    if (tickers !== undefined) {
+      if (!Array.isArray(tickers)) return res.status(400).json({ error: 'tickers must be an array' });
+      const seen = new Set<string>();
+      cleanTickers = [];
+      for (const t of tickers) {
+        const clean = typeof t === 'string' ? sanitizeTicker(t) : null;
+        if (!clean) return res.status(400).json({ error: `Invalid ticker symbol: ${t}` });
+        if (!seen.has(clean)) { seen.add(clean); cleanTickers.push(clean); }
+      }
+      cleanTickers = cleanTickers.slice(0, MAX_WORKSTATION_TICKERS);
+    }
+    let cleanLayout: string | null | undefined = undefined;
+    if (layout !== undefined) {
+      if (layout === null) cleanLayout = null;
+      else if (typeof layout === 'string' && WORKSTATION_LAYOUTS.includes(layout)) cleanLayout = layout;
+      else return res.status(400).json({ error: `layout must be one of: ${WORKSTATION_LAYOUTS.join(', ')}` });
+    }
+    const session = await updateChatSessionWorkstation(req.userId!, req.params.id, {
+      is_workstation: is_workstation as boolean | undefined,
+      tickers: cleanTickers,
+      layout: cleanLayout,
+    });
+    if (!session) {
+      return res.status(500).json({
+        error: 'Failed to update workstation fields — has the research-workstation migration been run? (see server/migrations)',
       });
     }
     return res.json({ success: true, session });

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   ChatCircleDots, Plus, List, X, PaperPlaneTilt, Flask, CaretRight,
-  CaretLeft, ChartLineUp, Check, PencilSimple, Layout,
+  CaretLeft, ChartLineUp, Check, PencilSimple, Layout, SquaresFour,
 } from '@phosphor-icons/react';
 import { TradeRecommendation, NewsItem, Position } from '../types';
 import {
@@ -15,9 +15,12 @@ import {
   loadSessionMessages,
   saveSessionMessages,
   updateChatSessionResearch,
+  updateChatSessionWorkstation,
+  fetchChatContext,
   fetchWatchlist,
 } from '../api';
 import StockChart from './StockChart';
+import WorkstationPanel from './WorkstationPanel';
 
 interface Message {
   id: string;
@@ -64,6 +67,18 @@ const LAYOUT_OPTIONS: { key: ChartLayout; label: string }[] = [
   { key: 'col-reverse', label: 'Chart on bottom' },
   { key: 'row', label: 'Chart on left' },
   { key: 'row-reverse', label: 'Chart on right' },
+];
+
+const isChartLayout = (v: unknown): v is ChartLayout =>
+  v === 'col' || v === 'col-reverse' || v === 'row' || v === 'row-reverse';
+
+// The three chat modes. 'research' pins one ticker's chart; 'workstation' loads several
+// side by side. Both are persisted as flags on the chat session (mutually exclusive).
+type ChatMode = 'chat' | 'research' | 'workstation';
+const MODE_OPTIONS: { key: ChatMode; label: string; Icon: typeof Flask }[] = [
+  { key: 'chat', label: 'Chat', Icon: ChatCircleDots },
+  { key: 'research', label: 'Research', Icon: Flask },
+  { key: 'workstation', label: 'Workstation', Icon: SquaresFour },
 ];
 
 // ─── Ticker + timeframe detection for research mode ──────────────────────────
@@ -162,7 +177,14 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
   // Research mode
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [researchPending, setResearchPending] = useState(false); // toggle before a session exists
+  const [workstationPending, setWorkstationPending] = useState(false); // workstation toggle before a session exists
   const [chartRange, setChartRange] = useState<ChartRange>('2y');
+  // Candle/news context for the workstation's loaded tickers, so the chat is aware of them
+  const [workstationCtx, setWorkstationCtx] = useState<{
+    candleSummaries: Record<string, string>;
+    tickerNews: Record<string, string[]>;
+    newsAPIArticles: NewsAPIResult[];
+  }>({ candleSummaries: {}, tickerNews: {}, newsAPIArticles: [] });
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [tickerInput, setTickerInput] = useState('');
   const [showTickerInput, setShowTickerInput] = useState(false);
@@ -198,8 +220,13 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     () => sessions.find(s => s.id === activeSessionId) ?? null,
     [sessions, activeSessionId]
   );
-  const isResearch = activeSession ? !!activeSession.is_research : researchPending;
+  const mode: ChatMode = activeSession
+    ? (activeSession.is_workstation ? 'workstation' : activeSession.is_research ? 'research' : 'chat')
+    : (workstationPending ? 'workstation' : researchPending ? 'research' : 'chat');
+  const isResearch = mode === 'research';
   const researchTicker = activeSession?.is_research ? activeSession.ticker ?? null : null;
+  const workstationTickers = activeSession?.is_workstation ? (activeSession.tickers ?? []) : [];
+  const showChartPanel = !!researchTicker || mode === 'workstation';
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -226,6 +253,22 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     if (isHorizontal && chartCollapsed) setChartCollapsed(false);
   }, [isHorizontal, chartCollapsed]);
 
+  // Load candle/news context for the workstation's loaded tickers so the chat can reason
+  // over them (reuses the same endpoint that feeds position tickers into chat context).
+  const workstationKey = workstationTickers.join(',');
+  useEffect(() => {
+    if (mode !== 'workstation' || workstationTickers.length === 0) {
+      setWorkstationCtx({ candleSummaries: {}, tickerNews: {}, newsAPIArticles: [] });
+      return;
+    }
+    let cancelled = false;
+    fetchChatContext(workstationTickers)
+      .then(ctx => { if (!cancelled) setWorkstationCtx(ctx); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, workstationKey]);
+
   const patchSessionLocal = useCallback((updated: ChatSession) => {
     setSessions(prev => {
       const next = prev.map(s => (s.id === updated.id ? { ...s, ...updated } : s));
@@ -242,12 +285,40 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     const updated = await updateChatSessionResearch(session.id, fields);
     if (updated) return updated;
     const local: ChatSession = { ...session };
-    if (fields.is_research !== undefined) local.is_research = fields.is_research;
+    if (fields.is_research !== undefined) {
+      local.is_research = fields.is_research;
+      if (fields.is_research) { local.is_workstation = false; local.tickers = []; }
+    }
     if (fields.ticker !== undefined) local.ticker = fields.ticker;
     if (fields.is_research === false) {
       local.ticker = null;
       local.updated_at = new Date().toISOString();
     }
+    return local;
+  }, []);
+
+  // Workstation equivalent of applyResearchPatch — persists, falling back to a local-only
+  // patch when the server can't (e.g. the workstation migration hasn't been run yet).
+  const applyWorkstationPatch = useCallback(async (
+    session: ChatSession,
+    fields: { is_workstation?: boolean; tickers?: string[]; layout?: string | null }
+  ): Promise<ChatSession> => {
+    const updated = await updateChatSessionWorkstation(session.id, fields);
+    if (updated) return updated;
+    const local: ChatSession = { ...session };
+    if (fields.is_workstation !== undefined) {
+      local.is_workstation = fields.is_workstation;
+      if (fields.is_workstation) {
+        local.is_research = false;
+        local.ticker = null;
+      } else {
+        local.tickers = [];
+        local.layout = null;
+        local.updated_at = new Date().toISOString();
+      }
+    }
+    if (fields.tickers !== undefined && fields.is_workstation !== false) local.tickers = fields.tickers;
+    if (fields.layout !== undefined && fields.is_workstation !== false) local.layout = fields.layout;
     return local;
   }, []);
 
@@ -261,6 +332,9 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     setSidebarOpen(false);
     setChartRange('2y');
     setShowTickerInput(false);
+    setResearchPending(false);
+    setWorkstationPending(false);
+    if (session.is_workstation && isChartLayout(session.layout)) setChartLayout(session.layout);
     const stored = await loadSessionMessages(session.id);
     if (stored.length === 0) {
       setMessages([WELCOME]);
@@ -276,6 +350,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     setMessages([WELCOME]);
     setInput('');
     setResearchPending(false);
+    setWorkstationPending(false);
     setChartRange('2y');
     setShowTickerInput(false);
     if (inputRef.current) inputRef.current.style.height = 'auto';
@@ -291,30 +366,83 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     }
   }, [activeSessionId]);
 
-  // Toggle research mode for the current chat (or pre-toggle for a new chat)
-  const toggleResearch = useCallback(async () => {
+  // Switch the active chat between the three modes (or pre-select for a new chat).
+  const setMode = useCallback(async (target: ChatMode) => {
+    if (target === mode) return;
+    setLayoutMenuOpen(false);
     if (!activeSession) {
-      setResearchPending(p => !p);
+      setResearchPending(target === 'research');
+      setWorkstationPending(target === 'workstation');
+      setShowTickerInput(false);
       return;
     }
-    const marking = !activeSession.is_research;
-    // Detect ticker from existing conversation when marking
-    let ticker: string | null = null;
-    if (marking) {
+    if (target === 'chat') {
+      const updated = activeSession.is_workstation
+        ? await applyWorkstationPatch(activeSession, { is_workstation: false })
+        : await applyResearchPatch(activeSession, { is_research: false });
+      patchSessionLocal(updated);
+      setShowTickerInput(false);
+    } else if (target === 'research') {
+      // Detect a ticker from the existing conversation when marking research
+      let ticker: string | null = null;
       for (const m of messages) {
         if (m.role !== 'user') continue;
         ticker = detectTicker(m.content, watchlist);
         if (ticker) break;
       }
+      const updated = await applyResearchPatch(activeSession, {
+        is_research: true,
+        ...(ticker ? { ticker } : {}),
+      });
+      patchSessionLocal(updated);
+      if (!updated.ticker) setShowTickerInput(true);
+    } else {
+      const updated = await applyWorkstationPatch(activeSession, { is_workstation: true });
+      patchSessionLocal(updated);
+      setShowTickerInput(false);
     }
-    const updated = await applyResearchPatch(activeSession, {
-      is_research: marking,
-      ...(marking && ticker ? { ticker } : {}),
-    });
+  }, [mode, activeSession, messages, watchlist, patchSessionLocal, applyResearchPatch, applyWorkstationPatch]);
+
+  // Create-or-return the active session as a workstation (so tickers added before the
+  // first message still persist), mirroring the lazy session creation in send().
+  const ensureWorkstationSession = useCallback(async (): Promise<ChatSession | null> => {
+    if (activeSession) return activeSession;
+    try {
+      const session = await createChatSession('Workstation');
+      const ws = await applyWorkstationPatch(session, { is_workstation: true });
+      setActiveSessionId(ws.id);
+      setSessions(prev => [ws, ...prev]);
+      setWorkstationPending(false);
+      return ws;
+    } catch {
+      return null;
+    }
+  }, [activeSession, applyWorkstationPatch]);
+
+  const addWorkstationTicker = useCallback(async (t: string) => {
+    const session = await ensureWorkstationSession();
+    if (!session) return;
+    const current = session.tickers ?? [];
+    if (current.includes(t) || current.length >= 12) return;
+    const updated = await applyWorkstationPatch(session, { tickers: [...current, t] });
     patchSessionLocal(updated);
-    if (marking && !updated.ticker) setShowTickerInput(true);
-    if (!marking) setShowTickerInput(false);
-  }, [activeSession, messages, watchlist, patchSessionLocal, applyResearchPatch]);
+  }, [ensureWorkstationSession, applyWorkstationPatch, patchSessionLocal]);
+
+  const removeWorkstationTicker = useCallback(async (t: string) => {
+    if (!activeSession) return;
+    const current = activeSession.tickers ?? [];
+    const updated = await applyWorkstationPatch(activeSession, { tickers: current.filter(x => x !== t) });
+    patchSessionLocal(updated);
+  }, [activeSession, applyWorkstationPatch, patchSessionLocal]);
+
+  // Pick a chart/chat split layout; persist it on the workstation session.
+  const chooseLayout = useCallback((key: ChartLayout) => {
+    setChartLayout(key);
+    setLayoutMenuOpen(false);
+    if (activeSession?.is_workstation) {
+      applyWorkstationPatch(activeSession, { layout: key }).then(patchSessionLocal);
+    }
+  }, [activeSession, applyWorkstationPatch, patchSessionLocal]);
 
   const submitTicker = useCallback(async () => {
     const t = tickerInput.trim().toUpperCase();
@@ -359,6 +487,9 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
           });
           setResearchPending(false);
           if (!stored.ticker) setShowTickerInput(true);
+        } else if (workstationPending) {
+          stored = await applyWorkstationPatch(session, { is_workstation: true });
+          setWorkstationPending(false);
         }
         setSessions(prev => [stored, ...prev]);
       } catch {
@@ -378,8 +509,22 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
       const history = [...messages, userMsg]
         .filter(m => m.id !== 'welcome')
         .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+      // In workstation mode, fold the loaded tickers' candle/news context in and tell
+      // the model which tickers are on screen so it can reason over "these" / "them".
+      const baseCtx = { positions, scanResults, news, prices, candleSummaries, tickerNews, newsAPIArticles };
+      const ctx = mode === 'workstation' && workstationTickers.length > 0
+        ? {
+            ...baseCtx,
+            candleSummaries: { ...candleSummaries, ...workstationCtx.candleSummaries },
+            tickerNews: { ...tickerNews, ...workstationCtx.tickerNews },
+            newsAPIArticles: [...newsAPIArticles, ...workstationCtx.newsAPIArticles],
+            workstationTickers,
+          }
+        : baseCtx;
+
       let finalContent = '';
-      await chatStream(history, { positions, scanResults, news, prices, candleSummaries, tickerNews, newsAPIArticles }, (chunk) => {
+      await chatStream(history, ctx, (chunk) => {
         finalContent += chunk;
         setMessages(prev => prev.map(m => m.id === asstId ? { ...m, content: m.content + chunk } : m));
       });
@@ -483,12 +628,15 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     }
   }, [folderRenameValue, applyResearchPatch, patchSessionLocal]);
 
-  // ── Sidebar grouping: research sessions foldered by ticker, then regular chats
-  const { researchFolders, regularSessions } = useMemo(() => {
+  // ── Sidebar grouping: workstations, then research sessions foldered by ticker, then chats
+  const { workstationSessions, researchFolders, regularSessions } = useMemo(() => {
     const folders: Record<string, ChatSession[]> = {};
     const regular: ChatSession[] = [];
+    const workstations: ChatSession[] = [];
     for (const s of sessions) {
-      if (s.is_research) {
+      if (s.is_workstation) {
+        workstations.push(s);
+      } else if (s.is_research) {
         const key = s.ticker || 'Untagged';
         (folders[key] ??= []).push(s);
       } else {
@@ -501,6 +649,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
       return a.localeCompare(b);
     });
     return {
+      workstationSessions: workstations,
       researchFolders: orderedKeys.map(k => ({ ticker: k, sessions: folders[k] })),
       regularSessions: regular,
     };
@@ -516,9 +665,11 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
           : 'text-gray-400 hover:bg-[#141415] hover:text-white'
       }`}
     >
-      {session.is_research
-        ? <Flask size={13} weight="duotone" className="flex-shrink-0 text-amber-500/80" />
-        : <ChatCircleDots size={13} weight="duotone" className="flex-shrink-0 text-gray-600" />}
+      {session.is_workstation
+        ? <SquaresFour size={13} weight="duotone" className="flex-shrink-0 text-amber-500/80" />
+        : session.is_research
+          ? <Flask size={13} weight="duotone" className="flex-shrink-0 text-amber-500/80" />
+          : <ChatCircleDots size={13} weight="duotone" className="flex-shrink-0 text-gray-600" />}
       <div className="flex-1 min-w-0">
         <p className="text-xs truncate leading-tight">{session.title}</p>
         <p className="text-[10px] text-gray-600 mt-0.5">{formatDate(session.updated_at)}</p>
@@ -567,6 +718,16 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
             <p className="text-xs text-gray-600 px-3 py-3">No saved chats yet.</p>
           ) : (
             <>
+              {/* Workstations */}
+              {workstationSessions.length > 0 && (
+                <div className="mb-1">
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-amber-500/70 uppercase tracking-widest flex items-center gap-1.5">
+                    <SquaresFour size={11} weight="duotone" /> Workstations
+                  </p>
+                  {workstationSessions.map(s => sessionRow(s))}
+                </div>
+              )}
+
               {/* Research folders */}
               {researchFolders.length > 0 && (
                 <div className="mb-1">
@@ -625,7 +786,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
               {/* Regular chats */}
               {regularSessions.length > 0 && (
                 <div>
-                  {researchFolders.length > 0 && (
+                  {(researchFolders.length > 0 || workstationSessions.length > 0) && (
                     <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
                       <ChatCircleDots size={11} weight="duotone" /> Chats
                     </p>
@@ -686,8 +847,8 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
             </form>
           )}
 
-          {/* Chart/chat layout picker (research mode only) */}
-          {researchTicker && (
+          {/* Chart/chat layout picker (research or workstation with charts loaded) */}
+          {(researchTicker || (mode === 'workstation' && workstationTickers.length > 0)) && (
             <div className="relative flex-shrink-0">
               <button
                 onClick={() => setLayoutMenuOpen(o => !o)}
@@ -705,7 +866,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                     {LAYOUT_OPTIONS.map(opt => (
                       <button
                         key={opt.key}
-                        onClick={() => { setChartLayout(opt.key); setLayoutMenuOpen(false); }}
+                        onClick={() => chooseLayout(opt.key)}
                         title={opt.label}
                         className={`p-2 rounded-md border transition-colors ${
                           chartLayout === opt.key ? 'border-amber-500/60 bg-amber-500/10' : 'border-[#222225] hover:border-[#333336]'
@@ -727,18 +888,28 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
             </div>
           )}
 
-          <button
-            onClick={toggleResearch}
-            title={isResearch ? 'Unmark as research (chat moves to today)' : 'Mark as research'}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all flex-shrink-0 ${
-              isResearch
-                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                : 'bg-[#141415] text-gray-500 border border-[#222225] hover:text-gray-300 hover:border-[#2e2e32]'
-            }`}
-          >
-            <Flask size={13} weight={isResearch ? 'fill' : 'duotone'} />
-            Research
-          </button>
+          {/* Mode toggle: Chat / Research / Workstation */}
+          <div className="flex items-center bg-[#141415] border border-[#222225] rounded-lg p-0.5 gap-0.5 flex-shrink-0">
+            {MODE_OPTIONS.map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                onClick={() => setMode(key)}
+                title={
+                  key === 'workstation' ? 'Workstation — load multiple charts side by side'
+                  : key === 'research' ? 'Research — pin one ticker chart'
+                  : 'Regular chat'
+                }
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                  mode === key
+                    ? 'bg-amber-500/15 text-amber-400'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                <Icon size={13} weight={mode === key ? 'fill' : 'duotone'} />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
+          </div>
 
           {activeSessionId && (
             <button
@@ -750,34 +921,42 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
           )}
         </div>
 
-        {/* Chart + conversation, arranged per the selected layout (research mode only) */}
+        {/* Chart(s) + conversation, arranged per the selected layout (research / workstation) */}
         <div
           ref={layoutContainerRef}
-          className={`flex-1 min-h-0 flex ${researchTicker ? LAYOUT_FLEX[chartLayout] : 'flex-col'} ${
+          className={`flex-1 min-h-0 flex ${showChartPanel ? LAYOUT_FLEX[chartLayout] : 'flex-col'} ${
             dragging ? `select-none ${isHorizontal ? 'cursor-col-resize' : 'cursor-row-resize'}` : ''
           }`}
         >
-          {researchTicker && (
+          {showChartPanel && (
             <div
               className={`flex flex-col min-w-0 min-h-0 flex-shrink-0 ${
                 chartCollapsed ? `${LAYOUT_DIVIDER[chartLayout]} border-[#222225]` : ''
               }`}
               style={chartCollapsed ? undefined : { flexBasis: `${(isHorizontal ? chartFraction.h : chartFraction.v) * 100}%` }}
             >
-              <StockChart
-                ticker={researchTicker}
-                range={chartRange}
-                onRangeChange={setChartRange}
-                fill={!chartCollapsed}
-                collapsed={chartCollapsed}
-                onToggleCollapse={() => setChartCollapsed(c => !c)}
-                showCollapse={!isHorizontal}
-              />
+              {researchTicker ? (
+                <StockChart
+                  ticker={researchTicker}
+                  range={chartRange}
+                  onRangeChange={setChartRange}
+                  fill={!chartCollapsed}
+                  collapsed={chartCollapsed}
+                  onToggleCollapse={() => setChartCollapsed(c => !c)}
+                  showCollapse={!isHorizontal}
+                />
+              ) : (
+                <WorkstationPanel
+                  tickers={workstationTickers}
+                  onAddTicker={addWorkstationTicker}
+                  onRemoveTicker={removeWorkstationTicker}
+                />
+              )}
             </div>
           )}
 
           {/* Drag-to-resize handle between the chart and the conversation */}
-          {researchTicker && !chartCollapsed && (
+          {showChartPanel && !chartCollapsed && (
             <div
               onPointerDown={startResize}
               onPointerMove={onResizeMove}
@@ -812,6 +991,12 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                 <p className="flex items-center gap-1.5 text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1 mb-5">
                   <ChartLineUp size={13} weight="duotone" />
                   Research mode — mention a ticker and I'll pin its chart
+                </p>
+              )}
+              {mode === 'workstation' && (
+                <p className="flex items-center gap-1.5 text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1 mb-5">
+                  <SquaresFour size={13} weight="duotone" />
+                  Workstation mode — add tickers to load charts side by side; I'll see what's loaded
                 </p>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md">
@@ -868,7 +1053,11 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKey}
-              placeholder={isResearch ? 'Ask about a stock — its chart pins above…' : 'Ask about setups, positions, or market conditions...'}
+              placeholder={
+                mode === 'workstation' ? 'Compare the loaded tickers, or ask anything…'
+                : isResearch ? 'Ask about a stock — its chart pins above…'
+                : 'Ask about setups, positions, or market conditions...'
+              }
               rows={1}
               className="flex-1 bg-transparent text-white text-sm placeholder-gray-600 resize-none focus:outline-none leading-relaxed py-0"
               style={{ maxHeight: '120px', scrollbarWidth: 'none' }}

@@ -869,6 +869,7 @@ export type ChatContext = {
   candleSummaries: Record<string, string>;
   tickerNews: Record<string, string[]>;  // ticker → recent headlines
   newsAPIArticles: NewsAPIResult[];
+  workstationTickers?: string[];  // tickers loaded side by side in a research workstation
 };
 
 // ─── Chat: streaming assistant ────────────────────────────────────────────────
@@ -939,15 +940,24 @@ function buildChatDataSection(ctx: ChatContext): string {
       }`
     : '';
 
+  const wsTickers = new Set((ctx.workstationTickers ?? []).map(t => t.toUpperCase()));
+  const wsSection = wsTickers.size > 0
+    ? `RESEARCH WORKSTATION — ${wsTickers.size} tickers loaded side by side for comparison: ${[...wsTickers].join(', ')}. When the user says "these", "them", "which one", or compares "the charts", they mean these tickers.`
+    : '';
+
   const candleEntries = Object.entries(ctx.candleSummaries);
   const marketTickers = ['SPY', 'QQQ', 'SOXX', 'SMH', 'VGT'];
   const marketCandles = candleEntries.filter(([t]) => marketTickers.includes(t));
-  const positionCandles = candleEntries.filter(([t]) => !marketTickers.includes(t));
+  const workstationCandles = candleEntries.filter(([t]) => !marketTickers.includes(t) && wsTickers.has(t));
+  const positionCandles = candleEntries.filter(([t]) => !marketTickers.includes(t) && !wsTickers.has(t));
 
   const candleSection = candleEntries.length > 0
     ? [
         marketCandles.length > 0
           ? `MARKET / SECTOR (5-day daily candles):\n${marketCandles.map(([, s]) => s).join('\n')}`
+          : '',
+        workstationCandles.length > 0
+          ? `WORKSTATION TICKERS (5-day daily candles):\n${workstationCandles.map(([, s]) => s).join('\n')}`
           : '',
         positionCandles.length > 0
           ? `POSITION TICKERS (5-day daily candles):\n${positionCandles.map(([, s]) => s).join('\n')}`
@@ -956,6 +966,8 @@ function buildChatDataSection(ctx: ChatContext): string {
     : '';
 
   return `Today is ${today}. The user's live data:
+
+${wsSection}
 
 ${posSection}
 

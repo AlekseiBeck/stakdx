@@ -263,6 +263,9 @@ export interface ChatSession {
   title: string;
   is_research?: boolean;
   ticker?: string | null;
+  is_workstation?: boolean;
+  tickers?: string[];
+  layout?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -301,6 +304,27 @@ export async function renameChatSession(id: string, title: string): Promise<void
 export async function updateChatSessionResearch(
   id: string,
   fields: { is_research?: boolean; ticker?: string | null }
+): Promise<ChatSession | null> {
+  try {
+    const headers = await authHeaders();
+    const res = await fetch(`${BASE}/chat/sessions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(fields),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.session ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Update workstation flag / loaded tickers / split layout. Returns the updated session,
+// or null on failure (e.g. the research-workstation DB migration hasn't been run yet).
+export async function updateChatSessionWorkstation(
+  id: string,
+  fields: { is_workstation?: boolean; tickers?: string[]; layout?: string | null }
 ): Promise<ChatSession | null> {
   try {
     const headers = await authHeaders();
@@ -378,6 +402,7 @@ export async function chatStream(
     candleSummaries: Record<string, string>;
     tickerNews: Record<string, string[]>;
     newsAPIArticles: NewsAPIResult[];
+    workstationTickers?: string[];
   },
   onChunk: (text: string) => void
 ): Promise<void> {
