@@ -30,9 +30,25 @@ npm run dev:client    # Vite frontend on :3000 with HMR
 # Production build
 npm run build:server  # tsc → server/dist/
 npm run build:client  # tsc + vite build → client/dist/
+
+# Tests (Vitest)
+npm test              # server suite, then client suite (each runs in its own package)
+npm run test:server   # server unit + integration (cd server && vitest run)
+npm run test:client   # client unit + component (cd client && vitest run)
+npm run test:coverage # both suites with v8 coverage
 ```
 
-No test or lint scripts are configured.
+No lint script is configured.
+
+## Testing
+
+Vitest powers both packages; tests run per-package (never a bare `vitest` at the repo root — with no root config it picks up everything without the per-package setup and fails). CI runs both suites on push/PR via `.github/workflows/test.yml`.
+
+- **Server** (`server/test/**/*.test.ts`, `environment: node`): tests live outside `src/` so the production `tsc` build never sees them. `test/setup.ts` pins a deterministic env (NODE_ENV=test so `index.ts` doesn't open a port/timer, a fixed `ENCRYPTION_KEY`, blanked external-API keys) and starts a shared **MSW** server (`test/msw.ts`) for outbound HTTP. `test/helpers.ts` builds `Candle` fixtures.
+  - Layers: pure-function units (encryption, alpaca scoring/profiling/summaries, `sanitizeArticles`/`decodeEntities`, `responseText`, newsapi cache); mocked-boundary module units (db via a chainable Supabase stub; auth; the Claude AI fns via a mocked `@anthropic-ai/sdk` — parse + fallback only, not output quality; brokerage/finnhub/reddit via MSW; notifications via mocked `web-push`); and **supertest** integration tests against the exported `app` (`integration.routes.test.ts` mocks `../src/auth` + uses in-memory position fallback; `integration.chat.test.ts` mocks the `@supabase/supabase-js` boundary so real auth + real db run against a stub).
+- **Client** (`client/src/**/*.test.{ts,tsx}`, jsdom + React Testing Library): `client/test/setup.ts` wires jest-dom + RTL cleanup and stubs `matchMedia`/`ResizeObserver`. Test globs are excluded from the build `tsconfig`. Covers `api.ts` wrappers (mocked `supabase` + `fetch`), the `detectRange`/`detectTicker` chat helpers, and `NewsPanel` / `WorkstationPanel` (chart + `../api` mocked).
+- **Testability seams:** `index.ts` exports `app` and guards its listener/price-timer behind `NODE_ENV !== 'test'`; a few pure helpers (`sanitizeArticles`, `decodeEntities`, `responseText`, `buildChatDataSection`, `detectRange`, `detectTicker`) are exported for direct unit tests.
+- **Not yet covered:** end-to-end (Playwright) journeys — `@playwright/test` is present but no E2E suite exists.
 
 ## Architecture
 

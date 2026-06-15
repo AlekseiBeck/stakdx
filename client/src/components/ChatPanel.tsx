@@ -109,7 +109,7 @@ const POPULAR_LOWER = new Set([
   'pltr', 'smci', 'avgo', 'intc', 'qqq', 'spy', 'sofi', 'hood', 'mstr', 'arm',
 ]);
 
-function detectTicker(text: string, watchlist: string[]): string | null {
+export function detectTicker(text: string, watchlist: string[]): string | null {
   const dollar = text.match(/\$([A-Za-z]{1,5})\b/);
   if (dollar) return dollar[1].toUpperCase();
 
@@ -129,7 +129,7 @@ function detectTicker(text: string, watchlist: string[]): string | null {
 }
 
 // Map natural-language time references to a chart range
-function detectRange(text: string): ChartRange | null {
+export function detectRange(text: string): ChartRange | null {
   const t = text.toLowerCase();
   if (/\b(right now|live price|at the moment)\b/.test(t)) return 'now';
   if (/\b(today|intraday|this morning|premarket|pre-market|after hours)\b/.test(t)) return '1d';

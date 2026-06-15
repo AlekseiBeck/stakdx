@@ -505,7 +505,7 @@ app.get('/api/watchlist', requireAuth, async (_req, res) => {
 const HTML_ENTITIES: Record<string, string> = {
   '&amp;': '&', '&quot;': '"', '&#39;': "'", '&#039;': "'", '&apos;': "'", '&lt;': '<', '&gt;': '>', '&nbsp;': ' ',
 };
-function decodeEntities(s: string): string {
+export function decodeEntities(s: string): string {
   return s.replace(/&(?:amp|quot|#0?39|apos|lt|gt|nbsp);/g, (m) => HTML_ENTITIES[m] ?? m);
 }
 
@@ -921,7 +921,7 @@ const MAX_WORKSTATION_ARTICLES = 30;
 
 // Validate + normalize the workstation `articles` list (saved news links). Returns the
 // cleaned array, or null if any entry is malformed.
-function sanitizeArticles(raw: unknown): WorkstationArticle[] | null {
+export function sanitizeArticles(raw: unknown): WorkstationArticle[] | null {
   if (!Array.isArray(raw)) return null;
   const out: WorkstationArticle[] = [];
   const seen = new Set<string>();
@@ -1140,16 +1140,22 @@ async function runPriceAlertCheck(): Promise<void> {
 
 // Start price alert monitor (every 2 minutes)
 const ALERT_INTERVAL_MS = 2 * 60 * 1000;
-setInterval(runPriceAlertCheck, ALERT_INTERVAL_MS);
 
 // ─── Start server ─────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Alpaca keys: ${process.env.ALPACA_API_KEY ? 'SET' : 'NOT SET'}`);
-  console.log(`Anthropic key: ${process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT SET'}`);
-  console.log(`Finnhub key: ${process.env.FINNHUB_API_KEY ? 'SET' : 'NOT SET'}`);
-  console.log(`Supabase: ${hasDatabase() ? 'SET' : 'NOT SET (using in-memory fallback)'}`);
-  console.log(`Encryption key: ${process.env.ENCRYPTION_KEY ? 'SET' : 'NOT SET'}`);
-  console.log(`VAPID keys: ${hasVapidKeys() ? 'SET (push notifications active)' : 'NOT SET (push disabled)'}`);
-  console.log(`NewsAPI key: ${process.env.NEWSAPI_KEY ? 'SET' : 'NOT SET'}`);
-});
+// Only boot the listener + background timer outside of tests (which import the
+// exported `app` and drive it with supertest, and must not open a port/timer).
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(runPriceAlertCheck, ALERT_INTERVAL_MS);
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Alpaca keys: ${process.env.ALPACA_API_KEY ? 'SET' : 'NOT SET'}`);
+    console.log(`Anthropic key: ${process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT SET'}`);
+    console.log(`Finnhub key: ${process.env.FINNHUB_API_KEY ? 'SET' : 'NOT SET'}`);
+    console.log(`Supabase: ${hasDatabase() ? 'SET' : 'NOT SET (using in-memory fallback)'}`);
+    console.log(`Encryption key: ${process.env.ENCRYPTION_KEY ? 'SET' : 'NOT SET'}`);
+    console.log(`VAPID keys: ${hasVapidKeys() ? 'SET (push notifications active)' : 'NOT SET (push disabled)'}`);
+    console.log(`NewsAPI key: ${process.env.NEWSAPI_KEY ? 'SET' : 'NOT SET'}`);
+  });
+}
+
+export { app, runPriceAlertCheck };

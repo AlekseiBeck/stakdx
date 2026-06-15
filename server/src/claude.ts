@@ -195,7 +195,7 @@ const TRIAGE_OUTPUT_FORMAT = {
 };
 
 // Extract the text block from a response that may also contain thinking blocks
-function responseText(msg: Anthropic.Message): string {
+export function responseText(msg: Anthropic.Message): string {
   for (const block of msg.content) {
     if (block.type === 'text') return block.text;
   }
@@ -914,7 +914,7 @@ STYLE RULES:
 - One financial disclaimer max per response, only if truly warranted. Never repeat generic warnings.
 - Traders want signal, not noise. Write like a Bloomberg analyst, not a blog post.`;
 
-function buildChatDataSection(ctx: ChatContext): string {
+export function buildChatDataSection(ctx: ChatContext): string {
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });

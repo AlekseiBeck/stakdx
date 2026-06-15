@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "description": "AI-powered swing trading assistant",
   "scripts": {
-    "install:all": "cd server && npm install && cd ../client && npm install",
+    "install:all": "cd server && npm install && cd ../client && npm install --legacy-peer-deps",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
     "build:server": "cd server && npm run build",
-    "build:client": "cd client && npm run build"
+    "build:client": "cd client && npm run build",
+    "test": "npm run test:server && npm run test:client",
+    "test:server": "cd server && npm test",
+    "test:client": "cd client && npm test",
+    "test:coverage": "cd server && npm run test:coverage && cd ../client && npm run test:coverage"
   },
   "dependencies": {
     "@playwright/test": "^1.60.0"
