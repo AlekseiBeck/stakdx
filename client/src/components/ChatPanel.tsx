@@ -14,6 +14,7 @@ import {
   deleteChatSession,
   loadSessionMessages,
   saveSessionMessages,
+  renameChatSession,
   updateChatSessionResearch,
   updateChatSessionWorkstation,
   fetchChatContext,
@@ -190,6 +191,8 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
   const [showTickerInput, setShowTickerInput] = useState(false);
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const [folderRenameValue, setFolderRenameValue] = useState('');
+  const [renamingWorkstation, setRenamingWorkstation] = useState<string | null>(null);
+  const [workstationRenameValue, setWorkstationRenameValue] = useState('');
   const [chartLayout, setChartLayout] = useState<ChartLayout>(() => {
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem('stakdx-chart-layout') : null;
     return saved === 'col' || saved === 'col-reverse' || saved === 'row' || saved === 'row-reverse' ? saved : 'col';
@@ -628,6 +631,22 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     }
   }, [folderRenameValue, applyResearchPatch, patchSessionLocal]);
 
+  const startRenameWorkstation = (e: React.MouseEvent, session: ChatSession) => {
+    e.stopPropagation();
+    setWorkstationRenameValue(session.title);
+    setRenamingWorkstation(session.id);
+  };
+
+  // Rename a workstation = set its session title (each workstation is its own saved instance).
+  const renameWorkstation = useCallback(async (session: ChatSession) => {
+    const title = workstationRenameValue.trim().slice(0, 100);
+    setRenamingWorkstation(null);
+    setWorkstationRenameValue('');
+    if (!title || title === session.title) return;
+    await renameChatSession(session.id, title);
+    patchSessionLocal({ ...session, title });
+  }, [workstationRenameValue, patchSessionLocal]);
+
   // ── Sidebar grouping: workstations, then research sessions foldered by ticker, then chats
   const { workstationSessions, researchFolders, regularSessions } = useMemo(() => {
     const folders: Record<string, ChatSession[]> = {};
@@ -683,6 +702,64 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     </div>
   );
 
+  // Workstation rows are renamable saved instances (like research folders), so they get
+  // their own row with an inline rename form + a rename pencil alongside delete.
+  const workstationRow = (session: ChatSession) => {
+    if (renamingWorkstation === session.id) {
+      return (
+        <form
+          key={session.id}
+          onSubmit={(e) => { e.preventDefault(); renameWorkstation(session); }}
+          className="flex items-center gap-1 px-3 py-1.5"
+        >
+          <SquaresFour size={13} weight="duotone" className="flex-shrink-0 text-amber-500/80" />
+          <input
+            autoFocus
+            value={workstationRenameValue}
+            onChange={(e) => setWorkstationRenameValue(e.target.value.slice(0, 100))}
+            onKeyDown={(e) => { if (e.key === 'Escape') { setRenamingWorkstation(null); setWorkstationRenameValue(''); } }}
+            placeholder="Workstation name"
+            className="flex-1 min-w-0 bg-[#141415] border border-amber-500/40 rounded px-1.5 py-0.5 text-[11px] text-white placeholder-gray-700 focus:outline-none"
+          />
+          <button type="submit" className="w-5 h-5 flex items-center justify-center rounded text-amber-400 hover:bg-amber-500/10" title="Rename workstation">
+            <Check size={12} weight="bold" />
+          </button>
+        </form>
+      );
+    }
+    return (
+      <div
+        key={session.id}
+        onClick={() => switchSession(session)}
+        className={`group flex items-center gap-2 py-2 pr-2 pl-3 cursor-pointer transition-colors ${
+          session.id === activeSessionId
+            ? 'bg-[#1a1a1c] text-white'
+            : 'text-gray-400 hover:bg-[#141415] hover:text-white'
+        }`}
+      >
+        <SquaresFour size={13} weight="duotone" className="flex-shrink-0 text-amber-500/80" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs truncate leading-tight">{session.title}</p>
+          <p className="text-[10px] text-gray-600 mt-0.5">{formatDate(session.updated_at)}</p>
+        </div>
+        <button
+          onClick={(e) => startRenameWorkstation(e, session)}
+          title="Rename workstation"
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-gray-600 hover:text-amber-400 transition-all flex-shrink-0"
+        >
+          <PencilSimple size={12} weight="bold" />
+        </button>
+        <button
+          onClick={(e) => handleDeleteSession(e, session.id)}
+          title="Delete workstation"
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-gray-600 hover:text-red-400 transition-all flex-shrink-0"
+        >
+          <X size={13} weight="bold" />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-full bg-[#0c0c0d] overflow-hidden">
       {/* Sidebar overlay on mobile */}
@@ -724,7 +801,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                   <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-amber-500/70 uppercase tracking-widest flex items-center gap-1.5">
                     <SquaresFour size={11} weight="duotone" /> Workstations
                   </p>
-                  {workstationSessions.map(s => sessionRow(s))}
+                  {workstationSessions.map(s => workstationRow(s))}
                 </div>
               )}
 
