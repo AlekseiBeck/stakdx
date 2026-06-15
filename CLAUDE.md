@@ -10,10 +10,10 @@ What a user can do with it:
 
 - **Run an AI market scan.** One click scores a ~240-ticker universe locally, takes the top 30, enriches them with multi-source data, and has Claude return ranked trade ideas — each a complete plan: direction (LONG/SHORT/CALL/PUT), confidence, entry zone, stop-loss, target, timeframe, chart pattern, position size, max risk, potential gain, and social sentiment. A LONG / BOTH / SHORT toggle biases the scan direction.
 - **Research any stock in AI chat.** A Bloomberg-analyst-style chat (web-search-enabled) answers free-form questions. A three-way **Chat / Research / Workstation** toggle in the chat top bar sets the mode per session. Flagging a chat as "research" tags it to a ticker and pins an interactive TradingView candlestick+volume chart (MAX→NOW ranges, with a resizable / repositionable chart-vs-chat layout); chat history persists per-user and groups research chats into per-ticker folders.
-- **Compare tickers in a Research Workstation.** Workstation mode loads several ticker charts in a responsive grid beside the conversation (same resizable / repositionable split as research). The chat is fed the loaded tickers, so "which of these has the best margins?" resolves to exactly the charts on screen. Loaded tickers + grid layout persist per workstation session.
+- **Compare tickers in a Research Workstation.** Workstation mode loads several ticker charts in a responsive grid beside the conversation (same resizable / repositionable split as research). The chat is fed the loaded tickers, so "which of these has the best margins?" resolves to exactly the charts on screen. A collapsible "Articles" tray lets the trader paste news links that are saved (title/source auto-resolved) to the session. Loaded tickers + saved articles + grid layout persist per workstation session.
 - **Track open positions.** Log a position (entry, direction, stop, target); the app shows live price and net P/L and gives an AI **HOLD / SELL / CAUTION** verdict per position. Web-push notifications fire when price crosses the stop or target.
 - **Paper trade.** Connect an Alpaca paper account (API keys AES-256-GCM encrypted at rest) to place and cancel real paper orders and view live account balances, buying power, and broker positions.
-- **Stay on top of news.** Aggregated market-wide and per-ticker headlines from Finnhub, NewsAPI, and Alpaca, plus an earnings/economic calendar feed.
+- **Stay on top of news.** Aggregated market-wide and per-ticker headlines from Finnhub, NewsAPI, and Alpaca, plus an earnings/economic calendar feed. A free-form news search expands a short query (e.g. "memory") into the affected market ecosystem (Claude maps it to the public companies, tickers, suppliers, products, and sub-themes whose stocks it moves), searches NewsAPI by relevancy, and shows a "Covering:" line summarizing what the search captured.
 
 It's an installable PWA (offline shell, push, mobile 4-tab nav) with per-user data isolated behind Supabase auth + row-level security. With no `ANTHROPIC_API_KEY` / `ALPACA_API_KEY` present it runs in a self-contained **demo mode** on mock data.
 
@@ -40,15 +40,15 @@ Full-stack swing trading dashboard: React frontend, Express backend, connected t
 
 ### Backend (`server/src/`)
 
-`index.ts` is the single Express entry point — all ~20 API routes live there. Key modules:
+`index.ts` is the single Express entry point — all ~30 API routes live there. Key modules:
 
 - **`alpaca.ts`** — Market data: 5-day OHLCV candles, news, live prices, StockTwits sentiment, intraday data, weekly candles, premarket candles, VWAP, and `fetchChartCandles(ticker, range)` for the research / workstation charts (range → granularity mapping in `CHART_RANGE_CONFIG`). Watchlist is ~240 tickers defined inline.
-- **`claude.ts`** — AI analysis and chat. `runScanPipeline()` scores all tickers locally, takes top 30, enriches with multi-source data, splits into 2 batches of 15. **Models (three tiers, all with `thinking: {type: 'adaptive'}`):** `claude-opus-4-8` (`SCAN_MODEL`) for scan batches — the deepest prediction task; `claude-sonnet-4-6` (`CHAT_MODEL`) for chat + position verdicts — interactive/bounded reasoning that's cheaper and faster on Sonnet with minimal quality loss; `claude-haiku-4-5` (`FAST_MODEL`) for cheap pre-processing (macro regime, news scoring). **All JSON responses use structured outputs** (`output_config.format` with JSON schemas defined at the top of the file) — never parse markdown fences; the API guarantees schema-valid JSON in the text block (use `responseText()` to skip thinking blocks). `streamChat()` uses the server-side `web_search_20260209` tool — the API executes searches itself; the loop only handles `stop_reason: 'pause_turn'` by re-sending the assistant turn. It's non-streaming (waits for full response) then yields the complete text. The chat system prompt is two blocks: a frozen `CHAT_PERSONA` (cache-friendly, contains the Bloomberg-analyst tone rules: no markdown headers, no horizontal rules, no emojis) + a dynamic live-data block.
+- **`claude.ts`** — AI analysis and chat. `runScanPipeline()` scores all tickers locally, takes top 30, enriches with multi-source data, splits into 2 batches of 15. **Models (three tiers, all with `thinking: {type: 'adaptive'}`):** `claude-opus-4-8` (`SCAN_MODEL`) for scan batches — the deepest prediction task; `claude-sonnet-4-6` (`CHAT_MODEL`) for chat + position verdicts — interactive/bounded reasoning that's cheaper and faster on Sonnet with minimal quality loss; `claude-haiku-4-5` (`FAST_MODEL`) for cheap pre-processing (macro regime, news scoring). **All JSON responses use structured outputs** (`output_config.format` with JSON schemas defined at the top of the file) — never parse markdown fences; the API guarantees schema-valid JSON in the text block (use `responseText()` to skip thinking blocks). `streamChat()` uses the server-side `web_search_20260209` tool — the API executes searches itself; the loop only handles `stop_reason: 'pause_turn'` by re-sending the assistant turn. It's non-streaming (waits for full response) then yields the complete text. The chat system prompt is two blocks: a frozen `CHAT_PERSONA` (cache-friendly, contains the Bloomberg-analyst tone rules: no markdown headers, no horizontal rules, no emojis) + a dynamic live-data block. `expandNewsQuery(input)` (Haiku, structured output) turns a short news search into an ecosystem-aware NewsAPI boolean query plus a human-readable `focus` line (the tickers/companies/themes covered); falls back to `{ query: input, focus: '' }` with no key or on error.
 - **`brokerage.ts`** — Alpaca Paper Trading API: place orders, fetch live positions/orders/account.
 - **`finnhub.ts`** — Company news (last 72h) + earnings calendar (7-day window) + economic calendar.
 - **`reddit.ts`** — Reddit sentiment scraping for watchlist tickers.
-- **`newsapi.ts`** — NewsAPI.org search: fixed macro queries + per-position ticker queries fetched at chat context load time.
-- **`db.ts`** — Supabase CRUD for: positions, brokerage accounts, push subscriptions, **chat sessions**, **chat messages**.
+- **`newsapi.ts`** — NewsAPI.org `/everything` search (`searchNews(query, pageSize, sortBy)`, `sortBy` ∈ `publishedAt | relevancy | popularity`, default `publishedAt`; results cached per `query|sortBy|pageSize`): fixed macro queries + per-position ticker queries at chat-context load, and the relevancy-sorted query behind `/api/news/search`.
+- **`db.ts`** — Supabase CRUD for: positions, brokerage accounts, push subscriptions, **chat sessions** (incl. workstation `tickers` / `layout` / `articles`), **chat messages**.
 - **`auth.ts`** — `requireAuth` middleware: validates Supabase JWT on all `/api/*` routes.
 - **`encryption.ts`** — AES-256-GCM for storing user Alpaca API keys.
 - **`notifications.ts`** — Web Push (VAPID): send alerts, manage subscriptions, price monitor loop.
@@ -61,7 +61,7 @@ Full-stack swing trading dashboard: React frontend, Express backend, connected t
 - **`AuthContext.tsx`** — `useAuth()` hook wrapping Supabase auth.
 - **`types.ts`** — Shared TypeScript interfaces (`TradeRecommendation`, `Position`, etc.).
 - **`components/ChatPanel.tsx`** — AI chat with persistent history sidebar. On desktop the sidebar is always visible (left column); on mobile it slides in via a hamburger toggle. Sessions are auto-created from the first message (title = truncated first message). Messages are saved to Supabase after each AI response. Hosts the **Chat / Research / Workstation** mode toggle and the shared resizable chart-vs-chat split (one `StockChart` for research, a `WorkstationPanel` grid for workstation).
-- **`components/WorkstationPanel.tsx`** — Research-workstation grid. Renders an `auto-fit` grid of `StockChart` tiles (each with its own independent range + a hover remove ×) plus an "add ticker" input. Reused inside `ChatPanel`'s chart-vs-chat split for workstation sessions.
+- **`components/WorkstationPanel.tsx`** — Research-workstation grid. Renders an `auto-fit` grid of `StockChart` tiles (each with its own independent range + a hover remove ×) plus an "add ticker" input, and a collapsible "Articles" footer tray for pasting/saving news links (title/source resolved via `fetchLinkPreview`). Reused inside `ChatPanel`'s chart-vs-chat split for workstation sessions.
 - **`components/Header.tsx`** — Top nav. Desktop: single row. Mobile: two rows — row 1 has logo + LONG/BOTH/SHORT + market status + sign out; row 2 has Run Scan + buying power input + Paper button.
 - **`components/ModeSwitcher.tsx`** — LONG / BOTH / SHORT pill toggle for scan direction.
 - **`components/landing/ParticleWave.tsx`** — Three.js/WebGL animated particle background for the landing hero. Falls back to a CSS `.aurora-fallback` gradient when WebGL can't initialize, and renders a single static frame under `prefers-reduced-motion`.
@@ -83,10 +83,16 @@ Full-stack swing trading dashboard: React frontend, Express backend, connected t
 4. Full response yielded at once (no token streaming) → frontend displays it
 5. After response: `POST /api/chat/sessions/:id/messages` saves both turns to Supabase
 
+**News search flow:**
+1. User types a query in the News panel → `GET /api/news/search?q=`
+2. Backend calls `expandNewsQuery(q)` (Haiku) → `{ query, focus }`, then `searchNews(query, 30, 'relevancy')`
+3. Response returns `{ news, focus, mock }`; `NewsPanel` renders the headlines plus a "Covering: {focus}" banner
+4. On no NewsAPI key / no matches: falls back to filtering the existing market feed by substring; on error returns `{ news: [], focus: '', mock: true }`
+
 **Chat history:**
 - `GET /api/chat/sessions` — list user's sessions (50 most recent)
 - `POST /api/chat/sessions` — create session (title = first message, max 100 chars)
-- `PATCH /api/chat/sessions/:id` — rename session and/or set research fields (`is_research` / `ticker`) or workstation fields (`is_workstation` / `tickers` / `layout`). Research and workstation are mutually exclusive — turning one on clears the other server-side. Un-marking either clears its state and bumps `updated_at` to now (the chat re-dates to today by design).
+- `PATCH /api/chat/sessions/:id` — rename session and/or set research fields (`is_research` / `ticker`) or workstation fields (`is_workstation` / `tickers` / `layout` / `articles`). `tickers`, `layout`, and `articles` are server-validated (tickers ≤12 & uppercased; layout ∈ the 4 split tokens; articles ≤30, deduped, valid http(s) urls, title/source length-capped). Research and workstation are mutually exclusive — turning one on clears the other server-side. Un-marking either clears its state (incl. `articles`) and bumps `updated_at` to now (the chat re-dates to today by design).
 - `DELETE /api/chat/sessions/:id` — delete session + cascade messages
 - `GET /api/chat/sessions/:id/messages` — load messages for a session
 - `POST /api/chat/sessions/:id/messages` — append messages
@@ -103,8 +109,9 @@ Full-stack swing trading dashboard: React frontend, Express backend, connected t
 - A chat toggles into "workstation" via the three-way mode toggle in the chat top bar (mutually exclusive with research). Workstation sessions carry a `tickers[]` array + a saved split `layout`, stored as flags on the same `chat_sessions` row.
 - `WorkstationPanel` renders the loaded tickers as a grid of `StockChart` tiles next to the conversation, reusing research mode's resizable chart-vs-chat split and its 4 arrangements (chart-grid on top/bottom/left/right). Layout changes persist per workstation session; ticker add/remove persist immediately (with a local-only fallback if the migration hasn't been run, mirroring research mode).
 - Chat awareness: `ChatPanel` fetches `GET /api/chat/context` for the loaded tickers (same endpoint as position context) and sends them as `context.workstationTickers` on `POST /api/chat/stream`. `buildChatDataSection()` in `claude.ts` adds a "RESEARCH WORKSTATION — N tickers loaded side by side" line and buckets their candle summaries under a WORKSTATION label, so the model resolves "these"/"them" to the on-screen set.
+- Saved articles: the workstation "Articles" tray persists pasted news links as `articles[]` (`{ url, title, source?, addedAt? }`) on the same `chat_sessions` row. Pasting a link calls `GET /api/link-preview?url=` which fetches the page (5s timeout, 1MB cap, ≤4 redirects) and extracts `og:title` / `<title>` (HTML entities decoded), falling back to the hostname when blocked or non-HTML. Add/remove persist immediately, with a local-only fallback if the migration hasn't been run (mirroring tickers/layout).
 - The history sidebar groups workstation sessions into a "Workstations" section (above "Research" / "Chats").
-- Requires the `is_workstation` / `tickers` / `layout` columns on `chat_sessions` (see the Supabase Schema section).
+- Requires the `is_workstation` / `tickers` / `layout` / `articles` columns on `chat_sessions` (see the Supabase Schema section).
 
 **Paper Trading flow:**
 User enters Alpaca key/secret → backend verifies, AES-256-GCM encrypts, stores in Supabase → on trade: backend decrypts, calls `paper-api.alpaca.markets`, returns order confirmation.
@@ -164,6 +171,7 @@ create table public.chat_sessions (
   is_workstation boolean not null default false, -- research-workstation flag (mutually exclusive with is_research)
   tickers text[] not null default '{}',        -- tickers loaded in a workstation, e.g. {AMD,NVDA,INTC}
   layout text,                                 -- saved chart-vs-chat split: col | col-reverse | row | row-reverse
+  articles jsonb not null default '[]'::jsonb, -- saved workstation news links: [{ url, title, source?, addedAt? }]
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
