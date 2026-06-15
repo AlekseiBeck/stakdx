@@ -107,7 +107,7 @@ export async function fetchNews(): Promise<{ news: NewsItem[]; mock: boolean }> 
   return get('/news');
 }
 
-export async function searchNewsArticles(query: string): Promise<{ news: NewsItem[]; mock: boolean }> {
+export async function searchNewsArticles(query: string): Promise<{ news: NewsItem[]; focus?: string; mock: boolean }> {
   return get(`/news/search?q=${encodeURIComponent(query)}`);
 }
 
@@ -257,6 +257,13 @@ export async function fetchChatContext(positionTickers: string[]): Promise<{
 
 // ─── Chat Sessions ────────────────────────────────────────────────────────────
 
+export interface WorkstationArticle {
+  url: string;
+  title: string;
+  source?: string;
+  addedAt?: string;
+}
+
 export interface ChatSession {
   id: string;
   user_id: string;
@@ -266,6 +273,7 @@ export interface ChatSession {
   is_workstation?: boolean;
   tickers?: string[];
   layout?: string | null;
+  articles?: WorkstationArticle[];
   created_at: string;
   updated_at: string;
 }
@@ -324,7 +332,7 @@ export async function updateChatSessionResearch(
 // or null on failure (e.g. the research-workstation DB migration hasn't been run yet).
 export async function updateChatSessionWorkstation(
   id: string,
-  fields: { is_workstation?: boolean; tickers?: string[]; layout?: string | null }
+  fields: { is_workstation?: boolean; tickers?: string[]; layout?: string | null; articles?: WorkstationArticle[] }
 ): Promise<ChatSession | null> {
   try {
     const headers = await authHeaders();
@@ -367,6 +375,21 @@ export async function fetchWatchlist(): Promise<string[]> {
     return data.tickers ?? [];
   } catch {
     return [];
+  }
+}
+
+// Resolve a pasted link's title/source for the workstation articles list. Falls back to
+// the hostname if the server can't fetch it.
+export async function fetchLinkPreview(url: string): Promise<{ title: string; source: string }> {
+  try {
+    return await get(`/link-preview?url=${encodeURIComponent(url)}`);
+  } catch {
+    try {
+      const h = new URL(url).hostname.replace(/^www\./, '');
+      return { title: h, source: h };
+    } catch {
+      return { title: url, source: '' };
+    }
   }
 }
 

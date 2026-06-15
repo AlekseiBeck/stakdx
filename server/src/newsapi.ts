@@ -20,10 +20,15 @@ function hasNewsAPIKey(): boolean {
   return !!(process.env.NEWSAPI_KEY && process.env.NEWSAPI_KEY !== 'your_newsapi_key_here');
 }
 
-export async function searchNews(query: string, pageSize = 5): Promise<NewsAPIArticle[]> {
+export async function searchNews(
+  query: string,
+  pageSize = 5,
+  sortBy: 'publishedAt' | 'relevancy' | 'popularity' = 'publishedAt'
+): Promise<NewsAPIArticle[]> {
   if (!hasNewsAPIKey()) return [];
 
-  const cached = cache.get(query);
+  const cacheKey = `${query}|${sortBy}|${pageSize}`;
+  const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
     return cached.articles;
   }
@@ -36,7 +41,7 @@ export async function searchNews(query: string, pageSize = 5): Promise<NewsAPIAr
       params: {
         q: query,
         pageSize,
-        sortBy: 'publishedAt',
+        sortBy,
         language: 'en',
         apiKey: process.env.NEWSAPI_KEY,
       },
@@ -51,7 +56,7 @@ export async function searchNews(query: string, pageSize = 5): Promise<NewsAPIAr
       url: a.url ?? '',
     }));
 
-    cache.set(query, { articles, fetchedAt: Date.now() });
+    cache.set(cacheKey, { articles, fetchedAt: Date.now() });
     return articles;
   } catch (err) {
     console.error(`[newsapi] Error for query "${query}":`, err);

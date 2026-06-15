@@ -8,6 +8,7 @@ import {
   chatStream,
   NewsAPIResult,
   ChatSession,
+  WorkstationArticle,
   ChartRange,
   listChatSessions,
   createChatSession,
@@ -229,6 +230,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
   const isResearch = mode === 'research';
   const researchTicker = activeSession?.is_research ? activeSession.ticker ?? null : null;
   const workstationTickers = activeSession?.is_workstation ? (activeSession.tickers ?? []) : [];
+  const workstationArticles = activeSession?.is_workstation ? (activeSession.articles ?? []) : [];
   const showChartPanel = !!researchTicker || mode === 'workstation';
 
   useEffect(() => {
@@ -304,7 +306,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
   // patch when the server can't (e.g. the workstation migration hasn't been run yet).
   const applyWorkstationPatch = useCallback(async (
     session: ChatSession,
-    fields: { is_workstation?: boolean; tickers?: string[]; layout?: string | null }
+    fields: { is_workstation?: boolean; tickers?: string[]; layout?: string | null; articles?: WorkstationArticle[] }
   ): Promise<ChatSession> => {
     const updated = await updateChatSessionWorkstation(session.id, fields);
     if (updated) return updated;
@@ -317,11 +319,13 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
       } else {
         local.tickers = [];
         local.layout = null;
+        local.articles = [];
         local.updated_at = new Date().toISOString();
       }
     }
     if (fields.tickers !== undefined && fields.is_workstation !== false) local.tickers = fields.tickers;
     if (fields.layout !== undefined && fields.is_workstation !== false) local.layout = fields.layout;
+    if (fields.articles !== undefined && fields.is_workstation !== false) local.articles = fields.articles;
     return local;
   }, []);
 
@@ -435,6 +439,22 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     if (!activeSession) return;
     const current = activeSession.tickers ?? [];
     const updated = await applyWorkstationPatch(activeSession, { tickers: current.filter(x => x !== t) });
+    patchSessionLocal(updated);
+  }, [activeSession, applyWorkstationPatch, patchSessionLocal]);
+
+  const addWorkstationArticle = useCallback(async (article: WorkstationArticle) => {
+    const session = await ensureWorkstationSession();
+    if (!session) return;
+    const current = session.articles ?? [];
+    if (current.some(a => a.url === article.url) || current.length >= 30) return;
+    const updated = await applyWorkstationPatch(session, { articles: [...current, article] });
+    patchSessionLocal(updated);
+  }, [ensureWorkstationSession, applyWorkstationPatch, patchSessionLocal]);
+
+  const removeWorkstationArticle = useCallback(async (url: string) => {
+    if (!activeSession) return;
+    const current = activeSession.articles ?? [];
+    const updated = await applyWorkstationPatch(activeSession, { articles: current.filter(a => a.url !== url) });
     patchSessionLocal(updated);
   }, [activeSession, applyWorkstationPatch, patchSessionLocal]);
 
@@ -1027,6 +1047,9 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                   tickers={workstationTickers}
                   onAddTicker={addWorkstationTicker}
                   onRemoveTicker={removeWorkstationTicker}
+                  articles={workstationArticles}
+                  onAddArticle={addWorkstationArticle}
+                  onRemoveArticle={removeWorkstationArticle}
                 />
               )}
             </div>

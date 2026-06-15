@@ -7,6 +7,7 @@ interface Props {
   onSearch: (query: string) => void;
   onClear: () => void;
   activeQuery: string;
+  focus?: string;
   isSearching: boolean;
 }
 
@@ -19,7 +20,7 @@ function formatAge(createdAt: string): string {
   return 'now';
 }
 
-export default function NewsPanel({ news, onSearch, onClear, activeQuery, isSearching }: Props) {
+export default function NewsPanel({ news, onSearch, onClear, activeQuery, focus, isSearching }: Props) {
   const [input, setInput] = useState('');
 
   const submit = (e: React.FormEvent) => {
@@ -72,13 +73,20 @@ export default function NewsPanel({ news, onSearch, onClear, activeQuery, isSear
 
       {/* Active-query banner */}
       {activeQuery && (
-        <div className="flex items-center justify-between px-4 py-2 border-b border-[#222225] bg-[#0e0e0f]">
-          <span className="text-xs text-gray-500">
-            Results for <span className="text-amber-400 font-semibold">"{activeQuery}"</span>
-          </span>
-          <button onClick={clear} className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors">
-            Clear
-          </button>
+        <div className="px-4 py-2 border-b border-[#222225] bg-[#0e0e0f]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-500">
+              Results for <span className="text-amber-400 font-semibold">"{activeQuery}"</span>
+            </span>
+            <button onClick={clear} className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors">
+              Clear
+            </button>
+          </div>
+          {focus && (
+            <p className="text-[11px] text-gray-600 mt-1 leading-snug">
+              <span className="text-gray-500 font-semibold">Covering:</span> {focus}
+            </p>
+          )}
         </div>
       )}
 

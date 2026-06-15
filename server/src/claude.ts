@@ -118,10 +118,14 @@ const NEWS_QUERY_OUTPUT_FORMAT = {
     properties: {
       query: {
         type: 'string',
-        description: 'A NewsAPI /everything "q" string: the topic plus closely related stock-moving themes, joined by OR, multi-word phrases in double quotes.',
+        description: 'A NewsAPI /everything "q" string. OR-join the topic with the specific public companies, tickers, suppliers, customers, key products, and sub-themes whose stocks the topic moves. Multi-word phrases in double quotes. Keep under ~480 characters.',
+      },
+      focus: {
+        type: 'string',
+        description: 'A short plain-text summary of what the search covers — the main tickers, companies, and themes, e.g. "Memory/storage — Micron (MU), SK Hynix, Samsung, Western Digital (WDC), Seagate (STX); DRAM/NAND/HBM".',
       },
     },
-    required: ['query'],
+    required: ['query', 'focus'],
     additionalProperties: false,
   },
 };
@@ -200,35 +204,49 @@ function responseText(msg: Anthropic.Message): string {
 
 // ─── News Search Query Expander (Claude Haiku) ───────────────────────────────
 //
-// Turns a trader's short search ("nvidia", "AI", "rate cuts") into a NewsAPI
-// boolean query that also captures closely related, stock-moving themes
-// (suppliers, sector, key products, catalysts). Falls back to the raw input
-// when no key is configured or on error so search still works.
+// Turns a trader's short research search ("AI", "NVDA", "memory") into a
+// comprehensive, ecosystem-aware NewsAPI boolean query: it maps the topic to the
+// specific public companies, tickers, suppliers/customers, products, and sub-themes
+// whose stocks the topic actually moves (e.g. "memory" → Micron, SK Hynix, Samsung,
+// Western Digital, Seagate; DRAM/NAND/HBM). Also returns a human-readable `focus`
+// line describing what the search covers. Falls back to the raw input on error.
 
-export async function expandNewsQuery(input: string): Promise<string> {
-  if (!hasAnthropicKey()) return input;
+export async function expandNewsQuery(input: string): Promise<{ query: string; focus: string }> {
+  const fallback = { query: input, focus: '' };
+  if (!hasAnthropicKey()) return fallback;
 
   const client = getClient();
 
   try {
     const msg = await client.messages.create({
       model: FAST_MODEL,
-      max_tokens: 200,
+      max_tokens: 400,
       system:
-        'You expand a retail trader\'s news search into a NewsAPI /everything query. ' +
-        'Given a topic, ticker, or company name, return a boolean query that captures the topic ' +
-        'AND the closely related themes that move its stock price (suppliers, sector peers, key ' +
-        'products, major catalysts). Keep it focused: 3-6 OR-joined terms or phrases, with ' +
-        'multi-word phrases in double quotes. Do not over-broaden into unrelated topics.',
-      messages: [{ role: 'user', content: `Topic: ${input}` }],
+        'You turn a retail trader\'s short news search into a comprehensive, research-grade ' +
+        'NewsAPI /everything query. Given a ticker, company, sector, or theme, identify the full ' +
+        'market ecosystem it touches — the public companies and tickers most affected, their key ' +
+        'suppliers and customers, flagship products, and the macro/sub-themes that move those stocks ' +
+        '— then build a focused boolean query that surfaces news impacting any of them.\n' +
+        'Rules:\n' +
+        '- Name specific publicly-traded companies and tickers. "memory" → Micron, SK Hynix, Samsung, ' +
+        'Western Digital, Seagate, Kioxia, plus DRAM, NAND, HBM. A bare ticker like "NVDA" → Nvidia ' +
+        'plus key suppliers/customers and catalysts (TSMC, data center, hyperscalers, CUDA).\n' +
+        '- OR-join 6-14 terms or phrases; quote multi-word phrases. Keep the query under ~480 characters.\n' +
+        '- Stay on-topic: include only names whose stock the topic genuinely moves; do not drift into ' +
+        'unrelated sectors.\n' +
+        '- focus: a concise plain-text list of the main tickers/companies/themes the search covers.',
+      messages: [{ role: 'user', content: `Search: ${input}` }],
       output_config: { format: NEWS_QUERY_OUTPUT_FORMAT },
     });
 
-    const parsed = JSON.parse(responseText(msg)) as { query: string };
-    return parsed.query?.trim() || input;
+    const parsed = JSON.parse(responseText(msg)) as { query: string; focus: string };
+    return {
+      query: parsed.query?.trim() || input,
+      focus: parsed.focus?.trim() || '',
+    };
   } catch (err) {
     console.error('[claude] News query expansion error:', err);
-    return input;
+    return fallback;
   }
 }
 

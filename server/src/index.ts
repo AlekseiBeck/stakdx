@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import axios from 'axios';
 import {
   fetchCandles,
   fetchCandlesForTicker,
@@ -67,6 +68,7 @@ import {
   getChatMessages,
   appendChatMessages,
 } from './db';
+import type { WorkstationArticle } from './db';
 import { Position, MacroRegime, ScoredNewsItem, NewsItem, Candle } from './types';
 import type { EarningsEvent, EconomicEvent } from './finnhub';
 import { encrypt, decrypt } from './encryption';
@@ -436,9 +438,9 @@ app.get('/api/news/search', requireAuth, async (req: AuthRequest, res) => {
   if (!q) return res.status(400).json({ error: 'q query param required' });
 
   try {
-    // Expand the query into related stock-moving themes, then search NewsAPI.
+    // Expand the query into the affected market ecosystem, then search NewsAPI by relevancy.
     const expanded = await expandNewsQuery(q);
-    const articles = await searchNews(expanded, 20);
+    const articles = await searchNews(expanded.query, 30, 'relevancy');
 
     if (articles.length > 0) {
       const news: NewsItem[] = articles.map((a, i) => ({
@@ -450,7 +452,7 @@ app.get('/api/news/search', requireAuth, async (req: AuthRequest, res) => {
         createdAt: a.publishedAt,
         symbols: [],
       }));
-      return res.json({ news, mock: false });
+      return res.json({ news, focus: expanded.focus, mock: false });
     }
 
     // Fallback (no NewsAPI key, or no matches): filter the existing market feed
@@ -463,10 +465,10 @@ app.get('/api/news/search', requireAuth, async (req: AuthRequest, res) => {
       n.summary.toLowerCase().includes(lc) ||
       n.symbols.some(s => s.toLowerCase().includes(lc))
     );
-    return res.json({ news: filtered, mock: feedRaw === null });
+    return res.json({ news: filtered, focus: expanded.focus, mock: feedRaw === null });
   } catch (err) {
     console.error('[news/search] Error:', err);
-    return res.status(500).json({ news: [], mock: true });
+    return res.status(500).json({ news: [], focus: '', mock: true });
   }
 });
 
@@ -497,6 +499,44 @@ app.get('/api/chart/:ticker', requireAuth, async (req: AuthRequest, res) => {
 // ─── GET /api/watchlist — ticker universe (used for client-side ticker detection)
 app.get('/api/watchlist', requireAuth, async (_req, res) => {
   return res.json({ tickers: await getUniverse() });
+});
+
+// ─── GET /api/link-preview — resolve a page's title for saved workstation article links ─
+const HTML_ENTITIES: Record<string, string> = {
+  '&amp;': '&', '&quot;': '"', '&#39;': "'", '&#039;': "'", '&apos;': "'", '&lt;': '<', '&gt;': '>', '&nbsp;': ' ',
+};
+function decodeEntities(s: string): string {
+  return s.replace(/&(?:amp|quot|#0?39|apos|lt|gt|nbsp);/g, (m) => HTML_ENTITIES[m] ?? m);
+}
+
+app.get('/api/link-preview', requireAuth, async (req: AuthRequest, res) => {
+  const url = (req.query.url as string | undefined)?.trim();
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return res.status(400).json({ error: 'A valid http(s) url is required' });
+  }
+  let hostname = '';
+  try { hostname = new URL(url).hostname.replace(/^www\./, ''); } catch {
+    return res.status(400).json({ error: 'Invalid url' });
+  }
+  try {
+    const { data } = await axios.get<string>(url, {
+      timeout: 5000,
+      maxContentLength: 1024 * 1024,
+      maxRedirects: 4,
+      responseType: 'text',
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StakdxBot/1.0)' },
+    });
+    const html = typeof data === 'string' ? data : '';
+    const og = html.match(/<meta[^>]+(?:property|name)=["']og:title["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']og:title["']/i);
+    const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const raw = (og?.[1] || titleTag?.[1] || '').replace(/\s+/g, ' ').trim();
+    const title = raw ? decodeEntities(raw).slice(0, 300) : hostname;
+    return res.json({ title, source: hostname });
+  } catch {
+    // Unreachable / blocked / non-HTML — fall back to the hostname so the link is still usable.
+    return res.json({ title: hostname, source: hostname });
+  }
 });
 
 // ─── GET /api/positions ───────────────────────────────────────────────────────
@@ -877,21 +917,46 @@ app.post('/api/chat/sessions', requireAuth, async (req: AuthRequest, res) => {
 // Split-layout tokens a workstation may persist (mirrors the client ChartLayout union).
 const WORKSTATION_LAYOUTS = ['col', 'col-reverse', 'row', 'row-reverse'];
 const MAX_WORKSTATION_TICKERS = 12;
+const MAX_WORKSTATION_ARTICLES = 30;
+
+// Validate + normalize the workstation `articles` list (saved news links). Returns the
+// cleaned array, or null if any entry is malformed.
+function sanitizeArticles(raw: unknown): WorkstationArticle[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: WorkstationArticle[] = [];
+  const seen = new Set<string>();
+  for (const a of raw) {
+    if (!a || typeof a !== 'object') return null;
+    const { url, title, source, addedAt } = a as Record<string, unknown>;
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url.trim()) || url.length > 2000) return null;
+    const cleanUrl = url.trim();
+    if (seen.has(cleanUrl)) continue;
+    seen.add(cleanUrl);
+    out.push({
+      url: cleanUrl,
+      title: (typeof title === 'string' && title.trim() ? title.trim() : cleanUrl).slice(0, 300),
+      ...(typeof source === 'string' && source.trim() ? { source: source.trim().slice(0, 80) } : {}),
+      addedAt: typeof addedAt === 'string' ? addedAt : new Date().toISOString(),
+    });
+  }
+  return out.slice(0, MAX_WORKSTATION_ARTICLES);
+}
 
 // PATCH /api/chat/sessions/:id — rename session and/or update research / workstation state
 app.patch('/api/chat/sessions/:id', requireAuth, async (req: AuthRequest, res) => {
   if (!hasDatabase()) return res.status(503).json({ error: 'Database not configured' });
-  const { title, is_research, ticker, is_workstation, tickers, layout } = req.body as {
+  const { title, is_research, ticker, is_workstation, tickers, layout, articles } = req.body as {
     title?: unknown;
     is_research?: unknown;
     ticker?: unknown;
     is_workstation?: unknown;
     tickers?: unknown;
     layout?: unknown;
+    articles?: unknown;
   };
 
   const hasResearchPatch = is_research !== undefined || ticker !== undefined;
-  const hasWorkstationPatch = is_workstation !== undefined || tickers !== undefined || layout !== undefined;
+  const hasWorkstationPatch = is_workstation !== undefined || tickers !== undefined || layout !== undefined || articles !== undefined;
   if (title === undefined && !hasResearchPatch && !hasWorkstationPatch) {
     return res.status(400).json({ error: 'Nothing to update' });
   }
@@ -950,10 +1015,17 @@ app.patch('/api/chat/sessions/:id', requireAuth, async (req: AuthRequest, res) =
       else if (typeof layout === 'string' && WORKSTATION_LAYOUTS.includes(layout)) cleanLayout = layout;
       else return res.status(400).json({ error: `layout must be one of: ${WORKSTATION_LAYOUTS.join(', ')}` });
     }
+    let cleanArticles: WorkstationArticle[] | undefined = undefined;
+    if (articles !== undefined) {
+      const parsed = sanitizeArticles(articles);
+      if (!parsed) return res.status(400).json({ error: 'articles must be an array of { url, title } with valid http(s) urls' });
+      cleanArticles = parsed;
+    }
     const session = await updateChatSessionWorkstation(req.userId!, req.params.id, {
       is_workstation: is_workstation as boolean | undefined,
       tickers: cleanTickers,
       layout: cleanLayout,
+      articles: cleanArticles,
     });
     if (!session) {
       return res.status(500).json({

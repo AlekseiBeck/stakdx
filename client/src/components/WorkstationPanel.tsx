@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Plus, X, SquaresFour } from '@phosphor-icons/react';
-import { ChartRange } from '../api';
+import { Plus, X, SquaresFour, Paperclip, CaretDown, ArrowSquareOut, CircleNotch } from '@phosphor-icons/react';
+import { ChartRange, WorkstationArticle, fetchLinkPreview } from '../api';
 import StockChart from './StockChart';
 
 interface WorkstationPanelProps {
   tickers: string[];
   onAddTicker: (ticker: string) => void;
   onRemoveTicker: (ticker: string) => void;
+  articles: WorkstationArticle[];
+  onAddArticle: (article: WorkstationArticle) => void;
+  onRemoveArticle: (url: string) => void;
 }
 
 // One grid tile: a chart for a single ticker with its own independent range.
@@ -35,7 +38,97 @@ function WorkstationChart({ ticker, onRemove }: { ticker: string; onRemove: () =
   );
 }
 
-export default function WorkstationPanel({ tickers, onAddTicker, onRemoveTicker }: WorkstationPanelProps) {
+// Collapsible footer menu for saving research article links to the workstation.
+function WorkstationArticles({ articles, onAdd, onRemove }: {
+  articles: WorkstationArticle[];
+  onAdd: (a: WorkstationArticle) => void;
+  onRemove: (url: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    let u = url.trim();
+    if (!u) return;
+    if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
+    setAdding(true);
+    try {
+      const meta = await fetchLinkPreview(u);
+      onAdd({ url: u, title: meta.title, source: meta.source, addedAt: new Date().toISOString() });
+      setUrl('');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <div className="flex-shrink-0 border-t border-[#222225]">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 h-9 text-gray-400 hover:text-white transition-colors"
+        title={open ? 'Hide articles' : 'Show articles'}
+      >
+        <Paperclip size={14} weight="duotone" className="text-amber-500/80 flex-shrink-0" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider">Articles</span>
+        {articles.length > 0 && <span className="text-[10px] text-gray-600 mono">{articles.length}</span>}
+        <div className="flex-1" />
+        <CaretDown size={13} weight="bold" className={`text-gray-600 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="px-3 pb-3 max-h-48 overflow-y-auto">
+          <form onSubmit={submit} className="flex items-center gap-1 mb-2">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Paste an article link…"
+              className="flex-1 min-w-0 bg-[#141415] border border-[#222225] rounded-md px-2 py-1 text-[11px] text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50"
+            />
+            <button
+              type="submit"
+              disabled={!url.trim() || adding}
+              title="Attach link"
+              className="w-6 h-6 flex items-center justify-center rounded-md text-amber-400 hover:bg-amber-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+            >
+              {adding ? <CircleNotch size={13} weight="bold" className="spin-slow" /> : <Plus size={13} weight="bold" />}
+            </button>
+          </form>
+
+          {articles.length === 0 ? (
+            <p className="text-[11px] text-gray-600 px-1 py-1">No articles attached. Paste a news link to save it here.</p>
+          ) : (
+            <div className="space-y-0.5">
+              {articles.map(a => (
+                <div key={a.url} className="group/article flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[#141415] transition-colors">
+                  <a href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] text-gray-300 truncate leading-tight group-hover/article:text-white transition-colors">{a.title}</p>
+                      {a.source && <p className="text-[9px] text-gray-600 mt-0.5 truncate">{a.source}</p>}
+                    </div>
+                    <ArrowSquareOut size={12} weight="bold" className="text-gray-700 flex-shrink-0" />
+                  </a>
+                  <button
+                    onClick={() => onRemove(a.url)}
+                    title="Remove article"
+                    className="opacity-0 group-hover/article:opacity-100 w-5 h-5 flex items-center justify-center text-gray-600 hover:text-red-400 transition-all flex-shrink-0"
+                  >
+                    <X size={12} weight="bold" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function WorkstationPanel({
+  tickers, onAddTicker, onRemoveTicker, articles, onAddArticle, onRemoveArticle,
+}: WorkstationPanelProps) {
   const [input, setInput] = useState('');
 
   const submit = (e: React.FormEvent) => {
@@ -91,6 +184,9 @@ export default function WorkstationPanel({ tickers, onAddTicker, onRemoveTicker 
           ))}
         </div>
       )}
+
+      {/* Saved research articles */}
+      <WorkstationArticles articles={articles} onAdd={onAddArticle} onRemove={onRemoveArticle} />
     </div>
   );
 }

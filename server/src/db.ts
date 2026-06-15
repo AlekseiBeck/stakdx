@@ -242,6 +242,13 @@ export async function getAllPushSubscriptions(): Promise<
 
 // ─── Chat Sessions ────────────────────────────────────────────────────────────
 
+export interface WorkstationArticle {
+  url: string;
+  title: string;
+  source?: string;
+  addedAt?: string;
+}
+
 export interface ChatSession {
   id: string;
   user_id: string;
@@ -251,6 +258,7 @@ export interface ChatSession {
   is_workstation?: boolean;
   tickers?: string[];
   layout?: string | null;
+  articles?: WorkstationArticle[];
   created_at: string;
   updated_at: string;
 }
@@ -344,7 +352,7 @@ export async function updateChatSessionResearch(
 export async function updateChatSessionWorkstation(
   userId: string,
   sessionId: string,
-  fields: { is_workstation?: boolean; tickers?: string[]; layout?: string | null }
+  fields: { is_workstation?: boolean; tickers?: string[]; layout?: string | null; articles?: WorkstationArticle[] }
 ): Promise<ChatSession | null> {
   const db = getClient();
   if (!db) return null;
@@ -358,6 +366,7 @@ export async function updateChatSessionWorkstation(
     } else {
       patch.tickers = [];
       patch.layout = null;
+      patch.articles = [];
       patch.updated_at = new Date().toISOString();
     }
   }
@@ -366,6 +375,9 @@ export async function updateChatSessionWorkstation(
   }
   if (fields.layout !== undefined && fields.is_workstation !== false) {
     patch.layout = fields.layout;
+  }
+  if (fields.articles !== undefined && fields.is_workstation !== false) {
+    patch.articles = fields.articles;
   }
 
   const { data, error } = await db

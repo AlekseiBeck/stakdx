@@ -43,6 +43,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsResults, setNewsResults] = useState<NewsItem[] | null>(null);
   const [newsQuery, setNewsQuery] = useState('');
+  const [newsFocus, setNewsFocus] = useState('');
   const [isSearchingNews, setIsSearchingNews] = useState(false);
   const [positions, setPositions] = useState<Position[]>([]);
   const [paperPositions, setPaperPositions] = useState<AlpacaPosition[]>([]);
@@ -189,8 +190,10 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     try {
       const r = await searchNewsArticles(query);
       setNewsResults(r.news);
+      setNewsFocus(r.focus ?? '');
     } catch {
       setNewsResults([]);
+      setNewsFocus('');
     } finally {
       setIsSearchingNews(false);
     }
@@ -199,6 +202,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const handleClearNewsSearch = useCallback(() => {
     setNewsQuery('');
     setNewsResults(null);
+    setNewsFocus('');
   }, []);
 
   const onTradeExecuted = (rec: TradeRecommendation, price: number) => {
@@ -285,6 +289,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
       onSearch={handleNewsSearch}
       onClear={handleClearNewsSearch}
       activeQuery={newsQuery}
+      focus={newsFocus}
       isSearching={isSearchingNews}
     />
   );
