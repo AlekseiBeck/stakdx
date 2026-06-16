@@ -32,6 +32,8 @@ client/env.local
 
 # Playwright test artifacts and screenshots
 .playwright-mcp/
+test-results/
+playwright-report/
 /test-*.png
 /stakd-*.png
 auth-token.txt

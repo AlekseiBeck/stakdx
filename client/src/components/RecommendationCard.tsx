@@ -36,15 +36,15 @@ function DirectionBadge({ direction }: { direction: TradeRecommendation['directi
 
 function ConfidenceScore({ value }: { value: number }) {
   const [stroke, text] =
-    value >= 80 ? ['#34d399', 'text-emerald-400'] :
-    value >= 65 ? ['#facc15', 'text-yellow-400'] :
-    ['#fb923c', 'text-orange-400'];
+    value >= 80 ? ['#34d399', 'text-emerald-700 dark:text-emerald-400'] :
+    value >= 65 ? ['#facc15', 'text-yellow-700 dark:text-yellow-400'] :
+    ['#fb923c', 'text-orange-700 dark:text-orange-400'];
   const C = 2 * Math.PI * 14;
 
   return (
     <div className="relative w-9 h-9 flex-shrink-0" title={`Confidence ${value}/100`}>
       <svg viewBox="0 0 36 36" className="w-9 h-9 -rotate-90">
-        <circle cx="18" cy="18" r="14" fill="none" stroke="#222225" strokeWidth="3.5" />
+        <circle cx="18" cy="18" r="14" fill="none" strokeWidth="3.5" className="stroke-border" />
         <circle
           cx="18" cy="18" r="14" fill="none" stroke={stroke} strokeWidth="3.5"
           strokeDasharray={`${(value / 100) * C} ${C}`} strokeLinecap="round"
@@ -94,7 +94,7 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
 
   return (
     <div
-      className={`card-elevated fade-in-up relative overflow-hidden cursor-pointer transition-all duration-200 hover:border-[#3a3a3f] hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-10px_rgba(0,0,0,0.7)] ${expanded ? 'border-[#3a3a3f]' : ''}`}
+      className={`card-elevated fade-in-up relative overflow-hidden cursor-pointer transition-all duration-200 hover:border-border-strong hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-10px_rgba(0,0,0,0.7)] ${expanded ? 'border-border-strong' : ''}`}
       style={{ animationDelay: `${Math.min(index * 60, 400)}ms`, opacity: 0 }}
       onClick={() => setExpanded((v) => !v)}
     >
@@ -105,16 +105,16 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
         {/* Top row: ticker + direction + confidence */}
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2.5">
-            <span className="mono text-xl font-bold text-white tracking-tight">{rec.ticker}</span>
+            <span className="mono text-xl font-bold text-fg tracking-tight">{rec.ticker}</span>
             <DirectionBadge direction={rec.direction} />
             {price && (
-              <span className="mono text-sm text-gray-400 font-medium">${price.toFixed(2)}</span>
+              <span className="mono text-sm text-muted font-medium">${price.toFixed(2)}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
             <ConfidenceScore value={rec.confidence} />
             <svg
-              className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+              className={`w-4 h-4 text-dim transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
               fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
@@ -124,28 +124,28 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
 
         {/* Middle: entry / stop / target grid */}
         <div className="grid grid-cols-3 gap-2 mb-3">
-          <div className="bg-[#111112] rounded-lg px-3 py-2">
-            <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-0.5">Entry</div>
-            <div className="mono text-sm font-bold text-white">{rec.entryZone}</div>
+          <div className="bg-bg rounded-lg px-3 py-2">
+            <div className="text-[10px] text-dim uppercase tracking-wider font-semibold mb-0.5">Entry</div>
+            <div className="mono text-sm font-bold text-fg">{rec.entryZone}</div>
           </div>
-          <div className="bg-red-950/30 rounded-lg px-3 py-2">
+          <div className="bg-red-50 dark:bg-red-950/30 rounded-lg px-3 py-2">
             <div className="text-[10px] text-red-700 uppercase tracking-wider font-semibold mb-0.5">Stop</div>
-            <div className="mono text-sm font-bold text-red-400">{rec.stopLoss}</div>
+            <div className="mono text-sm font-bold text-red-700 dark:text-red-400">{rec.stopLoss}</div>
           </div>
-          <div className="bg-emerald-950/30 rounded-lg px-3 py-2">
+          <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-lg px-3 py-2">
             <div className="text-[10px] text-emerald-700 uppercase tracking-wider font-semibold mb-0.5">Target</div>
-            <div className="mono text-sm font-bold text-emerald-400">{rec.target}</div>
+            <div className="mono text-sm font-bold text-emerald-700 dark:text-emerald-400">{rec.target}</div>
           </div>
         </div>
 
         {/* Bottom row: pattern + timeframe + R/R */}
         <div className="flex items-center flex-wrap gap-2">
-          <span className="text-xs text-gray-400 bg-[#1e1e20] px-2 py-0.5 rounded border border-[#222225]">
+          <span className="text-xs text-muted bg-surface-2 px-2 py-0.5 rounded border border-border">
             {rec.pattern}
           </span>
-          <span className="text-xs text-gray-600">{rec.timeframe}</span>
+          <span className="text-xs text-dim">{rec.timeframe}</span>
           {rr && (
-            <span className="text-xs mono font-semibold text-amber-400">{rr}:1 R/R</span>
+            <span className="text-xs mono font-semibold text-amber-600 dark:text-amber-400">{rr}:1 R/R</span>
           )}
         </div>
       </div>
@@ -153,27 +153,27 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
       {/* Expanded detail */}
       {expanded && (
         <div
-          className="border-t border-[#222225] px-4 py-4 space-y-4"
+          className="border-t border-border px-4 py-4 space-y-4"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Position sizing detail */}
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <div className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">Position Size</div>
-              <div className="text-sm text-gray-300 mono">{rec.positionSize || '—'}</div>
+              <div className="text-[10px] text-dim uppercase tracking-wider mb-1">Position Size</div>
+              <div className="text-sm text-muted mono">{rec.positionSize || '—'}</div>
             </div>
             <div>
               <div className="text-[10px] text-red-700 uppercase tracking-wider mb-1">Max Risk</div>
-              <div className="text-sm text-red-400 mono font-semibold">{rec.maxRisk || '—'}</div>
+              <div className="text-sm text-red-700 dark:text-red-400 mono font-semibold">{rec.maxRisk || '—'}</div>
             </div>
             <div>
               <div className="text-[10px] text-emerald-700 uppercase tracking-wider mb-1">Potential Gain</div>
-              <div className="text-sm text-emerald-400 mono font-semibold">{rec.potentialGain || '—'}</div>
+              <div className="text-sm text-emerald-700 dark:text-emerald-400 mono font-semibold">{rec.potentialGain || '—'}</div>
             </div>
           </div>
 
           {/* Gain/loss % detail */}
-          <div className="grid grid-cols-2 gap-2 text-xs mono text-gray-500">
+          <div className="grid grid-cols-2 gap-2 text-xs mono text-faint">
             <div>
               Potential: {calcPct(rec.entryZone, rec.target, isShort) ?? '—'} if target hit
             </div>
@@ -185,12 +185,12 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
           {/* AI Rationale */}
           <div>
             <div className="flex items-center gap-1.5 mb-2">
-              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-3.5 h-3.5 text-faint" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
               </svg>
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">AI Rationale</span>
+              <span className="text-[10px] font-bold text-faint uppercase tracking-wider">AI Rationale</span>
             </div>
-            <p className="text-sm text-gray-300 leading-relaxed">{rec.rationale}</p>
+            <p className="text-sm text-muted leading-relaxed">{rec.rationale}</p>
           </div>
 
           {/* Track Position button */}
@@ -213,7 +213,7 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
                   e.stopPropagation();
                   setShowTradeModal(true);
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-[#333336] text-gray-400 hover:bg-[#1e1e20] hover:border-[#555558] hover:text-gray-300 text-sm font-semibold transition-all"
+                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-border-strong text-muted hover:bg-surface-2 hover:border-border-strong hover:text-muted text-sm font-semibold transition-all"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />

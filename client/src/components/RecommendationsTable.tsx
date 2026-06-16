@@ -82,14 +82,14 @@ export default function RecommendationsTable({
         <div className="relative w-16 h-16 mx-auto mb-4">
           <span className="absolute inset-0 rounded-full border border-amber-500/40 radar-ping" />
           <span className="absolute inset-0 rounded-full border border-amber-500/25 radar-ping [animation-delay:1.2s]" />
-          <div className="relative w-16 h-16 rounded-full bg-[#1e1e20] border border-[#2a2a2c] flex items-center justify-center">
+          <div className="relative w-16 h-16 rounded-full bg-surface-2 border border-border-strong flex items-center justify-center">
             <svg className="w-8 h-8 text-amber-500/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
             </svg>
           </div>
         </div>
-        <p className="text-gray-400 font-medium">No scan results yet</p>
-        <p className="text-gray-600 text-sm mt-1">Run a scan to analyze the market</p>
+        <p className="text-muted font-medium">No scan results yet</p>
+        <p className="text-dim text-sm mt-1">Run a scan to analyze the market</p>
       </div>
     );
   }
@@ -109,13 +109,13 @@ export default function RecommendationsTable({
       {/* Direction filter pills */}
       {recommendations.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-600 font-medium">Filter:</span>
+          <span className="text-xs text-dim font-medium">Filter:</span>
           {(['LONG', 'SHORT', 'CALL', 'PUT'] as const).map((d) => {
             const colorMap = {
-              LONG: 'border-emerald-600 text-emerald-400 bg-emerald-900/40',
-              SHORT: 'border-red-600 text-red-400 bg-red-900/40',
-              CALL: 'border-amber-600 text-amber-400 bg-amber-900/40',
-              PUT: 'border-purple-600 text-purple-400 bg-purple-900/40',
+              LONG: 'border-emerald-300 dark:border-emerald-600 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/40',
+              SHORT: 'border-red-300 dark:border-red-600 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/40',
+              CALL: 'border-amber-300 dark:border-amber-600 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/40',
+              PUT: 'border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/40',
             };
             const count = recommendations.filter(r => r.direction === d).length;
             if (count === 0) return null;
@@ -126,7 +126,7 @@ export default function RecommendationsTable({
                 className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
                   dirFilter.has(d)
                     ? colorMap[d]
-                    : 'border-[#222225] text-gray-600 hover:text-gray-400'
+                    : 'border-border text-dim hover:text-muted'
                 }`}
               >
                 {d} <span className="opacity-60 font-normal">{count}</span>

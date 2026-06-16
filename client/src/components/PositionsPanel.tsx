@@ -160,12 +160,12 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[#222225]">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-faint" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
           </svg>
-          <h2 className="font-bold text-white">Active Positions</h2>
+          <h2 className="font-bold text-fg">Active Positions</h2>
           {positions.length > 0 && (
             <span className="bg-amber-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">{positions.length}</span>
           )}
@@ -175,7 +175,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
           {notifStatus === 'subscribed' ? (
             <button
               onClick={handleDisableNotifications}
-              className="flex items-center gap-1.5 text-xs py-1.5 px-2.5 rounded-lg bg-emerald-900/30 border border-emerald-700/40 text-emerald-400 hover:bg-red-900/20 hover:border-red-700/40 hover:text-red-400 transition-all"
+              className="flex items-center gap-1.5 text-xs py-1.5 px-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-700/40 hover:text-red-700 dark:hover:text-red-400 transition-all"
               title="Disable stop/target notifications"
             >
               <span className="relative flex h-2 w-2">
@@ -192,9 +192,9 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
               Enabling...
             </button>
           ) : notifStatus === 'denied' ? (
-            <span className="text-xs text-red-400/70 px-2">Notifications blocked</span>
+            <span className="text-xs text-red-700 dark:text-red-400/70 px-2">Notifications blocked</span>
           ) : notifStatus === 'unsupported' && !showIOSBanner ? (
-            <span className="text-xs text-gray-600 px-2">Alerts unavailable</span>
+            <span className="text-xs text-dim px-2">Alerts unavailable</span>
           ) : notifStatus !== 'unsupported' ? (
             <button
               onClick={handleEnableNotifications}
@@ -219,15 +219,15 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
       {/* Net unrealized P/L across the paper account's open positions */}
       {paperPositions.length > 0 && (
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#222225] bg-[#0e0e0f]">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-bg">
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Net Unrealized P/L</span>
+            <span className="text-[11px] uppercase tracking-wider text-faint font-semibold">Net Unrealized P/L</span>
           </div>
           <div className="text-right">
-            <div className={`mono text-lg font-bold leading-tight ${plUp ? 'text-emerald-400' : 'text-red-400'}`}>
+            <div className={`mono text-lg font-bold leading-tight ${plUp ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
               {plUp ? '+' : '−'}${Math.abs(totalPL).toFixed(2)}
             </div>
-            <div className={`mono text-[11px] leading-tight ${plUp ? 'text-emerald-400/80' : 'text-red-400/80'}`}>
+            <div className={`mono text-[11px] leading-tight ${plUp ? 'text-emerald-700 dark:text-emerald-400/80' : 'text-red-700 dark:text-red-400/80'}`}>
               {plUp ? '+' : ''}{totalPLPct.toFixed(2)}%
             </div>
           </div>
@@ -236,34 +236,34 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
       {/* iOS "Add to Home Screen" install banner */}
       {showIOSBanner && !iosBannerDismissed && (
-        <div className="mx-4 mt-4 p-3.5 rounded-xl bg-[#1a1a1c] border border-[#2a2a2c]">
+        <div className="mx-4 mt-4 p-3.5 rounded-xl bg-surface-2 border border-border-strong">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-2.5">
               <div className="mt-0.5 flex-shrink-0">
-                <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-semibold text-amber-300">Enable Stop/Target Alerts on iPhone</p>
-                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">Enable Stop/Target Alerts on iPhone</p>
+                <p className="text-xs text-muted mt-0.5 leading-relaxed">
                   To receive push notifications, install Stakdx on your Home Screen:
                 </p>
-                <ol className="text-xs text-gray-500 mt-1.5 space-y-0.5 leading-relaxed">
-                  <li>1. Tap the <strong className="text-amber-300">Share</strong> button in Safari (
+                <ol className="text-xs text-faint mt-1.5 space-y-0.5 leading-relaxed">
+                  <li>1. Tap the <strong className="text-amber-700 dark:text-amber-300">Share</strong> button in Safari (
                     <svg className="inline w-3.5 h-3.5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15" />
                     </svg>
                   )</li>
-                  <li>2. Scroll down and tap <strong className="text-amber-300">"Add to Home Screen"</strong></li>
+                  <li>2. Scroll down and tap <strong className="text-amber-700 dark:text-amber-300">"Add to Home Screen"</strong></li>
                   <li>3. Open Stakdx from your Home Screen and enable alerts here</li>
                 </ol>
-                <p className="text-[10px] text-gray-600 mt-1.5">Requires iOS 16.4 or later · Safari only</p>
+                <p className="text-[10px] text-dim mt-1.5">Requires iOS 16.4 or later · Safari only</p>
               </div>
             </div>
             <button
               onClick={() => setIosBannerDismissed(true)}
-              className="flex-shrink-0 text-gray-500 hover:text-gray-300 transition-colors"
+              className="flex-shrink-0 text-faint hover:text-muted transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -275,20 +275,20 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
       {positions.length === 0 && paperPositions.length === 0 ? (
         <div className="p-8 text-center">
-          <div className="w-12 h-12 rounded-full bg-[#1e1e20] flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-12 h-12 rounded-full bg-surface-2 flex items-center justify-center mx-auto mb-3">
+            <svg className="w-6 h-6 text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25" />
             </svg>
           </div>
-          <p className="text-gray-500 text-sm">No active positions</p>
-          <p className="text-gray-600 text-xs mt-1">Add a position to track it with AI</p>
+          <p className="text-faint text-sm">No active positions</p>
+          <p className="text-dim text-xs mt-1">Add a position to track it with AI</p>
         </div>
       ) : (
-        <div className="divide-y divide-[#222225]/60">
+        <div className="divide-y divide-border/60">
           {/* Paper account positions (live from Alpaca) */}
           {paperPositions.length > 0 && (
             <div className="px-5 py-3">
-              <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-2">
+              <div className="text-[10px] text-dim uppercase tracking-wider font-semibold mb-2">
                 Paper Account
               </div>
               <div className="space-y-1.5">
@@ -297,25 +297,25 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
                   const pl = parseFloat(pos.unrealized_pl);
                   const plPct = (parseFloat(pos.unrealized_plpc) * 100).toFixed(2);
                   return (
-                    <div key={pos.symbol} className="bg-[#111112] rounded-lg px-3 py-2.5 border border-[#222225]">
+                    <div key={pos.symbol} className="bg-bg rounded-lg px-3 py-2.5 border border-border">
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <span className="mono font-bold text-white text-sm">{pos.symbol}</span>
+                          <span className="mono font-bold text-fg text-sm">{pos.symbol}</span>
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                            isLong ? 'bg-emerald-900/50 border-emerald-700/40 text-emerald-400' : 'bg-red-900/50 border-red-700/40 text-red-400'
+                            isLong ? 'bg-emerald-50 dark:bg-emerald-900/50 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-900/50 border-red-200 dark:border-red-700/40 text-red-700 dark:text-red-400'
                           }`}>
                             {isLong ? 'LONG' : 'SHORT'}
                           </span>
-                          <span className="mono text-xs text-gray-500">{pos.qty} sh</span>
+                          <span className="mono text-xs text-faint">{pos.qty} sh</span>
                         </div>
-                        <span className={`mono text-sm font-bold ${pl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <span className={`mono text-sm font-bold ${pl >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
                           {pl >= 0 ? '+' : ''}${Math.abs(pl).toFixed(2)}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-xs mono text-gray-500">
+                      <div className="flex items-center justify-between text-xs mono text-faint">
                         <span>Avg ${parseFloat(pos.avg_entry_price).toFixed(2)}</span>
                         <span>Now ${parseFloat(pos.current_price).toFixed(2)}</span>
-                        <span className={pl >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                        <span className={pl >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}>
                           {pl >= 0 ? '+' : ''}{plPct}%
                         </span>
                       </div>
@@ -331,7 +331,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
             <div>
               {paperPositions.length > 0 && (
                 <div className="px-5 pt-3 pb-1">
-                  <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                  <div className="text-[10px] text-dim uppercase tracking-wider font-semibold flex items-center gap-1.5">
                     Tracked Positions
                   </div>
                 </div>
@@ -346,7 +346,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
                   <div className="flex items-center gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="mono font-bold text-lg text-white">{pos.ticker}</span>
+                        <span className="mono font-bold text-lg text-fg">{pos.ticker}</span>
                         {pos.direction === 'long' ? (
                           <span className="badge-long text-xs">
                             <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -364,26 +364,26 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
                         )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 flex-wrap">
-                        <span className="text-xs text-gray-500">Entry: <span className="mono text-gray-300">${pos.entryPrice.toFixed(2)}</span></span>
+                        <span className="text-xs text-faint">Entry: <span className="mono text-muted">${pos.entryPrice.toFixed(2)}</span></span>
                         {pos.stopLoss != null && (
                           <>
-                            <span className="text-xs text-gray-600">•</span>
-                            <span className="text-xs text-gray-500">Stop: <span className="mono text-red-400">${pos.stopLoss.toFixed(2)}</span></span>
+                            <span className="text-xs text-dim">•</span>
+                            <span className="text-xs text-faint">Stop: <span className="mono text-red-700 dark:text-red-400">${pos.stopLoss.toFixed(2)}</span></span>
                           </>
                         )}
                         {pos.target != null && (
                           <>
-                            <span className="text-xs text-gray-600">•</span>
-                            <span className="text-xs text-gray-500">Target: <span className="mono text-emerald-400">${pos.target.toFixed(2)}</span></span>
+                            <span className="text-xs text-dim">•</span>
+                            <span className="text-xs text-faint">Target: <span className="mono text-emerald-700 dark:text-emerald-400">${pos.target.toFixed(2)}</span></span>
                           </>
                         )}
-                        <span className="text-xs text-gray-600">•</span>
-                        <span className="text-xs text-gray-500">Held: <span className="text-gray-300">{formatTimeHeld(pos.entryTime)}</span></span>
+                        <span className="text-xs text-dim">•</span>
+                        <span className="text-xs text-faint">Held: <span className="text-muted">{formatTimeHeld(pos.entryTime)}</span></span>
                         {update?.data && (
                           <>
-                            <span className="text-xs text-gray-600">•</span>
-                            <span className="mono text-xs text-gray-300">{update.data.currentPrice}</span>
-                            <span className={`mono text-xs font-semibold ${update.data.priceChange.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
+                            <span className="text-xs text-dim">•</span>
+                            <span className="mono text-xs text-muted">{update.data.currentPrice}</span>
+                            <span className={`mono text-xs font-semibold ${update.data.priceChange.startsWith('+') ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
                               {update.data.priceChange}
                             </span>
                           </>
@@ -416,7 +416,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
                     </button>
                     <button
                       onClick={() => handleClose(pos.id)}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-900/20 transition-all"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-dim hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
                       title="Close position"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -428,17 +428,17 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
                 {update?.data && cfg && (
                   <div className={`rounded-lg p-3 mt-2 border ${
-                    update.data.verdict === 'HOLD' ? 'bg-[#111112] border-[#2a2a2c]' :
-                    update.data.verdict === 'SELL' ? 'bg-red-900/10 border-red-800/30' :
-                    'bg-amber-900/10 border-amber-800/30'
+                    update.data.verdict === 'HOLD' ? 'bg-bg border-border-strong' :
+                    update.data.verdict === 'SELL' ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/30' :
+                    'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30'
                   }`}>
                     <div className="flex items-center gap-2 mb-2">
                       <span className={cfg.class}>{cfg.icon} {cfg.label}</span>
                       {update.mock && (
-                        <span className="text-[10px] text-gray-600 bg-gray-800/50 px-1.5 py-0.5 rounded">demo</span>
+                        <span className="text-[10px] text-dim bg-surface-3 px-1.5 py-0.5 rounded">demo</span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-300 leading-relaxed">{update.data.reasoning}</p>
+                    <p className="text-sm text-muted leading-relaxed">{update.data.reasoning}</p>
                   </div>
                 )}
               </div>

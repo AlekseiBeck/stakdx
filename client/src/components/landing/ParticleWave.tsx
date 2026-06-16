@@ -7,7 +7,7 @@ import * as THREE from 'three';
  * sparse bright amber/emerald "signal" particles. Respects reduced motion.
  * Falls back to a CSS gradient (.aurora-fallback) when WebGL is unavailable.
  */
-export default function ParticleWave() {
+export default function ParticleWave({ theme }: { theme: 'light' | 'dark' }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [fallback, setFallback] = useState(false);
 
@@ -15,10 +15,11 @@ export default function ParticleWave() {
     const mount = mountRef.current;
     if (!mount) return;
 
+    const isDark = theme === 'dark';
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0c0c0d, 0.045);
+    scene.fog = new THREE.FogExp2(isDark ? 0x0c0c0d : 0xf5f5f7, 0.045);
 
     const camera = new THREE.PerspectiveCamera(
       60,
@@ -55,7 +56,9 @@ export default function ParticleWave() {
 
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
-    const dim = new THREE.Color('#574a23');
+    // The dim "grid" particles must read against the page: a dark gold on the
+    // black theme, a muted darker gold on the light theme (normal blending).
+    const dim = new THREE.Color(isDark ? '#574a23' : '#b3a06a');
     const amber = new THREE.Color('#f59e0b');
     const bright = new THREE.Color('#fcd34d');
     const emerald = new THREE.Color('#10b981');
@@ -85,7 +88,9 @@ export default function ParticleWave() {
       transparent: true,
       opacity: 0.85,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      // Additive glows beautifully on black but blows out to white on a light
+      // page, so fall back to normal blending in light mode.
+      blending: isDark ? THREE.AdditiveBlending : THREE.NormalBlending,
       sizeAttenuation: true,
     });
 
@@ -151,7 +156,7 @@ export default function ParticleWave() {
       renderer.dispose();
       mount.removeChild(renderer.domElement);
     };
-  }, []);
+  }, [theme]);
 
   if (fallback) {
     return <div className="absolute inset-0 aurora-fallback" aria-hidden="true" />;

@@ -11,6 +11,7 @@
     "test": "npm run test:server && npm run test:client",
     "test:server": "cd server && npm test",
     "test:client": "cd client && npm test",
+    "test:e2e": "playwright test",
     "test:coverage": "cd server && npm run test:coverage && cd ../client && npm run test:coverage"
   },
   "dependencies": {

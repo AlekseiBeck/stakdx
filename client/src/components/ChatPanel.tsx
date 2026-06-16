@@ -147,7 +147,7 @@ function renderContent(content: string) {
   const parts = content.split(/(\*\*[^*\n]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>;
+      return <strong key={i} className="font-semibold text-fg">{part.slice(2, -2)}</strong>;
     }
     return <span key={i}>{part}</span>;
   });
@@ -700,22 +700,22 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
       onClick={() => switchSession(session)}
       className={`group flex items-center gap-2 py-2 pr-2 cursor-pointer transition-colors ${indent ? 'pl-7' : 'pl-3'} ${
         session.id === activeSessionId
-          ? 'bg-[#1a1a1c] text-white'
-          : 'text-gray-400 hover:bg-[#141415] hover:text-white'
+          ? 'bg-surface-2 text-fg'
+          : 'text-muted hover:bg-surface hover:text-fg'
       }`}
     >
       {session.is_workstation
         ? <SquaresFour size={13} weight="duotone" className="flex-shrink-0 text-amber-500/80" />
         : session.is_research
           ? <Flask size={13} weight="duotone" className="flex-shrink-0 text-amber-500/80" />
-          : <ChatCircleDots size={13} weight="duotone" className="flex-shrink-0 text-gray-600" />}
+          : <ChatCircleDots size={13} weight="duotone" className="flex-shrink-0 text-dim" />}
       <div className="flex-1 min-w-0">
         <p className="text-xs truncate leading-tight">{session.title}</p>
-        <p className="text-[10px] text-gray-600 mt-0.5">{formatDate(session.updated_at)}</p>
+        <p className="text-[10px] text-dim mt-0.5">{formatDate(session.updated_at)}</p>
       </div>
       <button
         onClick={(e) => handleDeleteSession(e, session.id)}
-        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-gray-600 hover:text-red-400 transition-all flex-shrink-0"
+        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-dim hover:text-red-700 dark:hover:text-red-400 transition-all flex-shrink-0"
       >
         <X size={13} weight="bold" />
       </button>
@@ -739,9 +739,9 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
             onChange={(e) => setWorkstationRenameValue(e.target.value.slice(0, 100))}
             onKeyDown={(e) => { if (e.key === 'Escape') { setRenamingWorkstation(null); setWorkstationRenameValue(''); } }}
             placeholder="Workstation name"
-            className="flex-1 min-w-0 bg-[#141415] border border-amber-500/40 rounded px-1.5 py-0.5 text-[11px] text-white placeholder-gray-700 focus:outline-none"
+            className="flex-1 min-w-0 bg-surface border border-amber-500/40 rounded px-1.5 py-0.5 text-[11px] text-fg placeholder-dim focus:outline-none"
           />
-          <button type="submit" className="w-5 h-5 flex items-center justify-center rounded text-amber-400 hover:bg-amber-500/10" title="Rename workstation">
+          <button type="submit" className="w-5 h-5 flex items-center justify-center rounded text-amber-600 dark:text-amber-400 hover:bg-amber-500/10" title="Rename workstation">
             <Check size={12} weight="bold" />
           </button>
         </form>
@@ -753,26 +753,26 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
         onClick={() => switchSession(session)}
         className={`group flex items-center gap-2 py-2 pr-2 pl-3 cursor-pointer transition-colors ${
           session.id === activeSessionId
-            ? 'bg-[#1a1a1c] text-white'
-            : 'text-gray-400 hover:bg-[#141415] hover:text-white'
+            ? 'bg-surface-2 text-fg'
+            : 'text-muted hover:bg-surface hover:text-fg'
         }`}
       >
         <SquaresFour size={13} weight="duotone" className="flex-shrink-0 text-amber-500/80" />
         <div className="flex-1 min-w-0">
           <p className="text-xs truncate leading-tight">{session.title}</p>
-          <p className="text-[10px] text-gray-600 mt-0.5">{formatDate(session.updated_at)}</p>
+          <p className="text-[10px] text-dim mt-0.5">{formatDate(session.updated_at)}</p>
         </div>
         <button
           onClick={(e) => startRenameWorkstation(e, session)}
           title="Rename workstation"
-          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-gray-600 hover:text-amber-400 transition-all flex-shrink-0"
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-dim hover:text-amber-600 dark:hover:text-amber-400 transition-all flex-shrink-0"
         >
           <PencilSimple size={12} weight="bold" />
         </button>
         <button
           onClick={(e) => handleDeleteSession(e, session.id)}
           title="Delete workstation"
-          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-gray-600 hover:text-red-400 transition-all flex-shrink-0"
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-dim hover:text-red-700 dark:hover:text-red-400 transition-all flex-shrink-0"
         >
           <X size={13} weight="bold" />
         </button>
@@ -781,7 +781,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
   };
 
   return (
-    <div className="flex h-full bg-[#0c0c0d] overflow-hidden">
+    <div className="flex h-full bg-bg overflow-hidden">
       {/* Sidebar overlay on mobile */}
       {sidebarOpen && (
         <div
@@ -792,19 +792,19 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
 
       {/* Session sidebar — collapses fully (width 0) on desktop; off-canvas overlay on mobile */}
       <div className={`
-        absolute lg:relative z-20 flex flex-shrink-0 bg-[#0e0e0f] overflow-hidden
-        w-64 h-full transition-all duration-200 ease-in-out border-r border-[#1e1e20]
+        absolute lg:relative z-20 flex flex-shrink-0 bg-bg overflow-hidden
+        w-64 h-full transition-all duration-200 ease-in-out border-r border-border
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         ${historyCollapsed ? 'lg:w-0 lg:border-r-0' : 'lg:w-64'}
       `}>
         {/* Full history content — fixed width so it clips/slides instead of reflowing */}
         <div className={`w-64 h-full flex flex-col flex-shrink-0 ${historyCollapsed ? 'lg:pointer-events-none' : ''}`}>
-        <div className="flex items-center justify-between px-3 h-12 border-b border-[#222225]">
-          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">History</span>
+        <div className="flex items-center justify-between px-3 h-12 border-b border-border">
+          <span className="text-xs font-semibold text-muted uppercase tracking-wider">History</span>
           <button
             onClick={startNewChat}
             title="New chat"
-            className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-[#222225] transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded-md text-muted hover:text-fg hover:bg-surface-3 transition-colors"
           >
             <Plus size={15} weight="bold" />
           </button>
@@ -812,7 +812,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
 
         <div className="flex-1 overflow-y-auto py-1">
           {sessions.length === 0 ? (
-            <p className="text-xs text-gray-600 px-3 py-3">No saved chats yet.</p>
+            <p className="text-xs text-dim px-3 py-3">No saved chats yet.</p>
           ) : (
             <>
               {/* Workstations */}
@@ -847,26 +847,26 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                               onChange={(e) => setFolderRenameValue(e.target.value.toUpperCase().replace(/[^A-Z.]/g, '').slice(0, 6))}
                               onKeyDown={(e) => { if (e.key === 'Escape') { setRenamingFolder(null); setFolderRenameValue(''); } }}
                               placeholder="TICKER"
-                              className="w-20 bg-[#141415] border border-amber-500/40 rounded px-1.5 py-0.5 mono text-[11px] font-bold text-white placeholder-gray-700 focus:outline-none"
+                              className="w-20 bg-surface border border-amber-500/40 rounded px-1.5 py-0.5 mono text-[11px] font-bold text-fg placeholder-dim focus:outline-none"
                             />
-                            <button type="submit" className="w-5 h-5 flex items-center justify-center rounded text-amber-400 hover:bg-amber-500/10" title="Rename folder">
+                            <button type="submit" className="w-5 h-5 flex items-center justify-center rounded text-amber-600 dark:text-amber-400 hover:bg-amber-500/10" title="Rename folder">
                               <Check size={12} weight="bold" />
                             </button>
                           </form>
                         ) : (
-                          <div className="group/folder flex items-center gap-1.5 px-3 py-1.5 text-gray-400 hover:text-white transition-colors">
+                          <div className="group/folder flex items-center gap-1.5 px-3 py-1.5 text-muted hover:text-fg transition-colors">
                             <button onClick={() => toggleFolder(ticker)} className="flex items-center gap-1.5 flex-1 min-w-0 text-left">
-                              <CaretRight size={11} weight="bold" className={`text-gray-600 flex-shrink-0 transition-transform duration-200 ${collapsed ? '' : 'rotate-90'}`} />
+                              <CaretRight size={11} weight="bold" className={`text-dim flex-shrink-0 transition-transform duration-200 ${collapsed ? '' : 'rotate-90'}`} />
                               <span className="mono text-[11px] font-bold tracking-wide truncate">{ticker}</span>
                             </button>
                             <button
                               onClick={(e) => startRenameFolder(e, ticker)}
                               title="Rename folder"
-                              className="opacity-0 group-hover/folder:opacity-100 w-5 h-5 flex items-center justify-center rounded text-gray-500 hover:text-amber-400 transition-all flex-shrink-0"
+                              className="opacity-0 group-hover/folder:opacity-100 w-5 h-5 flex items-center justify-center rounded text-faint hover:text-amber-600 dark:hover:text-amber-400 transition-all flex-shrink-0"
                             >
                               <PencilSimple size={12} weight="bold" />
                             </button>
-                            <span className="text-[10px] text-gray-600 flex-shrink-0">{folderSessions.length}</span>
+                            <span className="text-[10px] text-dim flex-shrink-0">{folderSessions.length}</span>
                           </div>
                         )}
                         <div className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'}`}>
@@ -884,7 +884,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
               {regularSessions.length > 0 && (
                 <div>
                   {(researchFolders.length > 0 || workstationSessions.length > 0) && (
-                    <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
+                    <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-dim uppercase tracking-widest flex items-center gap-1.5">
                       <ChatCircleDots size={11} weight="duotone" /> Chats
                     </p>
                   )}
@@ -900,27 +900,27 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
       {/* Main chat area */}
       <div className="flex flex-col flex-1 min-w-0 h-full">
         {/* Top bar with sidebar toggle + research toggle */}
-        <div className="flex-shrink-0 flex items-center gap-2 px-4 h-12 border-b border-[#222225]">
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 h-12 border-b border-border">
           <button
             onClick={() => setSidebarOpen(o => !o)}
             title="Toggle history"
-            className="lg:hidden w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors"
+            className="lg:hidden w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-fg hover:bg-surface-2 transition-colors"
           >
             <List size={16} weight="bold" />
           </button>
           <button
             onClick={() => setHistoryCollapsed(c => !c)}
             title={historyCollapsed ? 'Show history' : 'Hide history'}
-            className="hidden lg:flex w-7 h-7 items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors flex-shrink-0"
+            className="hidden lg:flex w-7 h-7 items-center justify-center rounded-md text-faint hover:text-fg hover:bg-surface-2 transition-colors flex-shrink-0"
           >
             {historyCollapsed ? <CaretRight size={16} weight="bold" /> : <CaretLeft size={16} weight="bold" />}
           </button>
           {researchTicker && (
-            <span className="mono text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/25 rounded px-1.5 py-0.5 flex-shrink-0">
+            <span className="mono text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/25 rounded px-1.5 py-0.5 flex-shrink-0">
               {researchTicker}
             </span>
           )}
-          <span className="text-xs text-gray-500 truncate">
+          <span className="text-xs text-faint truncate">
             {activeSession ? activeSession.title : 'New Chat'}
           </span>
 
@@ -936,9 +936,9 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                 value={tickerInput}
                 onChange={(e) => setTickerInput(e.target.value.toUpperCase().replace(/[^A-Z.]/g, '').slice(0, 6))}
                 placeholder="TICKER"
-                className="w-20 bg-[#141415] border border-[#2a2a2c] rounded-md px-2 py-1 mono text-[11px] text-white placeholder-gray-700 focus:outline-none focus:border-amber-500/50"
+                className="w-20 bg-surface border border-border-strong rounded-md px-2 py-1 mono text-[11px] text-fg placeholder-dim focus:outline-none focus:border-amber-500/50"
               />
-              <button type="submit" className="w-6 h-6 flex items-center justify-center rounded-md text-amber-400 hover:bg-amber-500/10" title="Set ticker">
+              <button type="submit" className="w-6 h-6 flex items-center justify-center rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-500/10" title="Set ticker">
                 <Check size={13} weight="bold" />
               </button>
             </form>
@@ -951,7 +951,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                 onClick={() => setLayoutMenuOpen(o => !o)}
                 title="Chart layout"
                 className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
-                  layoutMenuOpen ? 'text-amber-400 bg-amber-500/10' : 'text-gray-500 hover:text-white hover:bg-[#1e1e20]'
+                  layoutMenuOpen ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10' : 'text-faint hover:text-fg hover:bg-surface-2'
                 }`}
               >
                 <Layout size={15} weight="bold" />
@@ -959,22 +959,22 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
               {layoutMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setLayoutMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1.5 z-50 p-2 rounded-lg bg-[#141415] border border-[#2a2a2c] shadow-xl shadow-black/40 grid grid-cols-[auto_auto] gap-2">
+                  <div className="absolute right-0 top-full mt-1.5 z-50 p-2 rounded-lg bg-surface border border-border-strong shadow-xl shadow-black/40 grid grid-cols-[auto_auto] gap-2">
                     {LAYOUT_OPTIONS.map(opt => (
                       <button
                         key={opt.key}
                         onClick={() => chooseLayout(opt.key)}
                         title={opt.label}
                         className={`p-2 rounded-md border transition-colors ${
-                          chartLayout === opt.key ? 'border-amber-500/60 bg-amber-500/10' : 'border-[#222225] hover:border-[#333336]'
+                          chartLayout === opt.key ? 'border-amber-500/60 bg-amber-500/10' : 'border-border hover:border-border-strong'
                         }`}
                       >
                         <div className={`flex ${LAYOUT_FLEX[opt.key]} gap-1 w-16 h-12`}>
-                          <div className="flex-1 flex items-center justify-center rounded bg-[#1e1e20] border border-[#2e2e32]" title="Chart">
-                            <ChartLineUp size={14} weight="duotone" className="text-gray-400" />
+                          <div className="flex-1 flex items-center justify-center rounded bg-surface-2 border border-border-strong" title="Chart">
+                            <ChartLineUp size={14} weight="duotone" className="text-muted" />
                           </div>
-                          <div className="flex-1 flex items-center justify-center rounded bg-[#1e1e20] border border-[#2e2e32]" title="Chat">
-                            <ChatCircleDots size={14} weight="duotone" className="text-gray-400" />
+                          <div className="flex-1 flex items-center justify-center rounded bg-surface-2 border border-border-strong" title="Chat">
+                            <ChatCircleDots size={14} weight="duotone" className="text-muted" />
                           </div>
                         </div>
                       </button>
@@ -986,7 +986,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
           )}
 
           {/* Mode toggle: Chat / Research / Workstation */}
-          <div className="flex items-center bg-[#141415] border border-[#222225] rounded-lg p-0.5 gap-0.5 flex-shrink-0">
+          <div className="flex items-center bg-surface border border-border rounded-lg p-0.5 gap-0.5 flex-shrink-0">
             {MODE_OPTIONS.map(({ key, label, Icon }) => (
               <button
                 key={key}
@@ -998,8 +998,8 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                 }
                 className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold transition-all ${
                   mode === key
-                    ? 'bg-amber-500/15 text-amber-400'
-                    : 'text-gray-500 hover:text-gray-300'
+                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                    : 'text-faint hover:text-muted'
                 }`}
               >
                 <Icon size={13} weight={mode === key ? 'fill' : 'duotone'} />
@@ -1011,7 +1011,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
           {activeSessionId && (
             <button
               onClick={startNewChat}
-              className="text-[10px] text-gray-600 hover:text-amber-400 transition-colors flex-shrink-0"
+              className="text-[10px] text-dim hover:text-amber-600 dark:hover:text-amber-400 transition-colors flex-shrink-0"
             >
               + New
             </button>
@@ -1028,7 +1028,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
           {showChartPanel && (
             <div
               className={`flex flex-col min-w-0 min-h-0 flex-shrink-0 ${
-                chartCollapsed ? `${LAYOUT_DIVIDER[chartLayout]} border-[#222225]` : ''
+                chartCollapsed ? `${LAYOUT_DIVIDER[chartLayout]} border-border` : ''
               }`}
               style={chartCollapsed ? undefined : { flexBasis: `${(isHorizontal ? chartFraction.h : chartFraction.v) * 100}%` }}
             >
@@ -1065,7 +1065,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
               style={{ touchAction: 'none' }}
               className={`flex-shrink-0 transition-colors ${
                 isHorizontal ? 'w-1.5 cursor-col-resize' : 'h-1.5 cursor-row-resize'
-              } ${dragging ? 'bg-amber-500/60' : 'bg-[#222225] hover:bg-amber-500/40'}`}
+              } ${dragging ? 'bg-amber-500/60' : 'bg-surface-3 hover:bg-amber-500/40'}`}
             />
           )}
 
@@ -1076,25 +1076,25 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
           {loadingSession ? (
             <div className="flex items-center justify-center h-full">
               <div className="flex gap-1.5">
-                <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-bounce [animation-delay:0ms]" />
-                <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-bounce [animation-delay:150ms]" />
-                <span className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-bounce [animation-delay:300ms]" />
+                <span className="w-1.5 h-1.5 bg-dim rounded-full animate-bounce [animation-delay:0ms]" />
+                <span className="w-1.5 h-1.5 bg-dim rounded-full animate-bounce [animation-delay:150ms]" />
+                <span className="w-1.5 h-1.5 bg-dim rounded-full animate-bounce [animation-delay:300ms]" />
               </div>
             </div>
           ) : messages.length === 1 && messages[0].id === 'welcome' ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-6 fade-in-up">
-              <h2 className="font-display text-xl font-bold text-white mb-1.5">Stakdx AI</h2>
-              <p className="text-sm text-gray-500 max-w-sm mb-4 leading-relaxed">
+              <h2 className="font-display text-xl font-bold text-fg mb-1.5">Stakdx AI</h2>
+              <p className="text-sm text-faint max-w-sm mb-4 leading-relaxed">
                 Ask about scan results, your positions, or any setup you're watching.
               </p>
               {researchPending && (
-                <p className="flex items-center gap-1.5 text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1 mb-5">
+                <p className="flex items-center gap-1.5 text-[11px] text-amber-600/90 dark:text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1 mb-5">
                   <ChartLineUp size={13} weight="duotone" />
                   Research mode — mention a ticker and I'll pin its chart
                 </p>
               )}
               {mode === 'workstation' && (
-                <p className="flex items-center gap-1.5 text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1 mb-5">
+                <p className="flex items-center gap-1.5 text-[11px] text-amber-600/90 dark:text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1 mb-5">
                   <SquaresFour size={13} weight="duotone" />
                   Workstation mode — add tickers to load charts side by side; I'll see what's loaded
                 </p>
@@ -1104,7 +1104,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                   <button
                     key={s}
                     onClick={() => send(s)}
-                    className="text-left text-xs text-gray-400 glass rounded-xl px-3.5 py-3 hover:border-amber-500/40 hover:text-gray-200 transition-all duration-200"
+                    className="text-left text-xs text-muted glass rounded-xl px-3.5 py-3 hover:border-amber-500/40 hover:text-fg transition-all duration-200"
                   >
                     {s}
                   </button>
@@ -1121,21 +1121,21 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                 )}
                 <div className={`max-w-[82%] text-sm leading-relaxed ${
                   msg.role === 'user'
-                    ? 'bg-[#222225] text-white px-4 py-2.5 rounded-2xl rounded-br-sm shadow-lg'
-                    : 'text-gray-200'
+                    ? 'bg-surface-3 text-fg px-4 py-2.5 rounded-2xl rounded-br-sm shadow-lg'
+                    : 'text-fg'
                 }`}>
                   {msg.content === '' && isStreaming ? (
                     <span className="flex gap-1.5 items-center h-5">
-                      <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:0ms]" />
-                      <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:150ms]" />
-                      <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:300ms]" />
+                      <span className="w-1.5 h-1.5 bg-faint rounded-full animate-bounce [animation-delay:0ms]" />
+                      <span className="w-1.5 h-1.5 bg-faint rounded-full animate-bounce [animation-delay:150ms]" />
+                      <span className="w-1.5 h-1.5 bg-faint rounded-full animate-bounce [animation-delay:300ms]" />
                     </span>
                   ) : (
                     <span className="whitespace-pre-wrap">{renderContent(msg.content)}</span>
                   )}
                 </div>
                 {msg.role === 'user' && (
-                  <div className="w-7 h-7 rounded-full bg-[#1e1e20] border border-[#2a2a2c] flex items-center justify-center text-[11px] font-bold text-gray-500 flex-shrink-0 mt-0.5">
+                  <div className="w-7 h-7 rounded-full bg-surface-2 border border-border-strong flex items-center justify-center text-[11px] font-bold text-faint flex-shrink-0 mt-0.5">
                     U
                   </div>
                 )}
@@ -1146,8 +1146,8 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
         </div>
 
         {/* Input bar */}
-        <div className="flex-shrink-0 px-4 pt-3 pb-3 border-t border-[#222225]" style={{ paddingLeft: 'max(16px, env(safe-area-inset-left))', paddingRight: 'max(16px, env(safe-area-inset-right))' }}>
-          <div className="flex items-center gap-2 bg-[#141415] border border-[#222225] rounded-xl px-3.5 py-2.5 focus-within:border-amber-500/40 focus-within:shadow-[0_0_0_3px_rgba(245,158,11,0.08)] transition-all">
+        <div className="flex-shrink-0 px-4 pt-3 pb-3 border-t border-border" style={{ paddingLeft: 'max(16px, env(safe-area-inset-left))', paddingRight: 'max(16px, env(safe-area-inset-right))' }}>
+          <div className="flex items-center gap-2 bg-surface border border-border rounded-xl px-3.5 py-2.5 focus-within:border-amber-500/40 focus-within:shadow-[0_0_0_3px_rgba(245,158,11,0.08)] transition-all">
             <textarea
               ref={inputRef}
               value={input}
@@ -1159,7 +1159,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                 : 'Ask about setups, positions, or market conditions...'
               }
               rows={1}
-              className="flex-1 bg-transparent text-white text-sm placeholder-gray-600 resize-none focus:outline-none leading-relaxed py-0"
+              className="flex-1 bg-transparent text-fg text-sm placeholder-dim resize-none focus:outline-none leading-relaxed py-0"
               style={{ maxHeight: '120px', scrollbarWidth: 'none' }}
             />
             <button
@@ -1170,7 +1170,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
               <PaperPlaneTilt size={15} weight="fill" />
             </button>
           </div>
-          <p className="hidden sm:block text-[10px] text-gray-700 mt-1.5 text-center">Enter to send · Shift+Enter for newline</p>
+          <p className="hidden sm:block text-[10px] text-dim mt-1.5 text-center">Enter to send · Shift+Enter for newline</p>
         </div>
           </div>
         </div>

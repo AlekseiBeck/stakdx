@@ -9,6 +9,7 @@ import {
 } from 'lightweight-charts';
 import { CaretDown, CaretUp } from '@phosphor-icons/react';
 import { fetchChartData, ChartRange, ChartCandle } from '../api';
+import { useTheme } from '../ThemeContext';
 
 const RANGES: { id: ChartRange; label: string }[] = [
   { id: 'max', label: 'MAX' },
@@ -33,6 +34,8 @@ interface StockChartProps {
 }
 
 export default function StockChart({ ticker, range, onRangeChange, fill = false, collapsed, onToggleCollapse, showCollapse = true, compact = false }: StockChartProps) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const filling = fill && !collapsed;
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -45,20 +48,25 @@ export default function StockChart({ ticker, range, onRangeChange, fill = false,
     if (collapsed || !containerRef.current) return;
 
     const el = containerRef.current;
+    // lightweight-charts needs concrete colors (can't read CSS vars), so derive
+    // the neutral chrome from the theme. Candle up/down + crosshair amber stay.
+    const gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)';
+    const axisBorder = isDark ? '#222225' : '#e5e5e7';
+    const axisText = isDark ? '#71717a' : '#8e8e93';
     const chart = createChart(el, {
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#71717a',
+        textColor: axisText,
         fontFamily: "'IBM Plex Mono', monospace",
         fontSize: 10,
         attributionLogo: false,
       },
       grid: {
-        vertLines: { color: 'rgba(255,255,255,0.04)' },
-        horzLines: { color: 'rgba(255,255,255,0.04)' },
+        vertLines: { color: gridColor },
+        horzLines: { color: gridColor },
       },
-      rightPriceScale: { borderColor: '#222225' },
-      timeScale: { borderColor: '#222225', timeVisible: range !== 'max' && range !== '2y' && range !== '1y' && range !== 'ytd' },
+      rightPriceScale: { borderColor: axisBorder },
+      timeScale: { borderColor: axisBorder, timeVisible: range !== 'max' && range !== '2y' && range !== '1y' && range !== 'ytd' },
       crosshair: {
         vertLine: { color: 'rgba(245,158,11,0.35)', labelBackgroundColor: '#f59e0b' },
         horzLine: { color: 'rgba(245,158,11,0.35)', labelBackgroundColor: '#f59e0b' },
@@ -122,7 +130,7 @@ export default function StockChart({ ticker, range, onRangeChange, fill = false,
       chart.remove();
       chartRef.current = null;
     };
-  }, [ticker, range, collapsed]);
+  }, [ticker, range, collapsed, isDark]);
 
   // Keep the chart filled whenever its container resizes (layout change or drag-resize)
   useEffect(() => {
@@ -140,17 +148,17 @@ export default function StockChart({ ticker, range, onRangeChange, fill = false,
   const up = changePct != null && changePct >= 0;
 
   return (
-    <div className={`bg-[#0e0e0f] ${filling ? 'flex-1 min-h-0 flex flex-col' : 'flex-shrink-0'}`}>
+    <div className={`bg-bg ${filling ? 'flex-1 min-h-0 flex flex-col' : 'flex-shrink-0'}`}>
       {/* Chart header */}
       <div className="flex items-center gap-2.5 px-4 h-10">
-        <span className="mono text-sm font-bold text-white">{ticker}</span>
+        <span className="mono text-sm font-bold text-fg">{ticker}</span>
         {lastCandle && !loading && (
           <>
-            <span className="mono text-xs text-gray-300">${lastCandle.c.toFixed(2)}</span>
+            <span className="mono text-xs text-muted">${lastCandle.c.toFixed(2)}</span>
             {changePct != null && (
-              <span className={`mono text-[11px] font-semibold ${up ? 'text-emerald-400' : 'text-red-400'}`}>
+              <span className={`mono text-[11px] font-semibold ${up ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
                 {up ? '▲' : '▼'} {Math.abs(changePct).toFixed(2)}%
-                <span className="text-gray-600 font-normal ml-1">{range.toUpperCase()}</span>
+                <span className="text-dim font-normal ml-1">{range.toUpperCase()}</span>
               </span>
             )}
           </>
@@ -163,8 +171,8 @@ export default function StockChart({ ticker, range, onRangeChange, fill = false,
               onClick={() => onRangeChange(r.id)}
               className={`mono text-[10px] font-semibold px-1.5 py-1 rounded transition-colors ${
                 range === r.id
-                  ? 'bg-amber-500/15 text-amber-400'
-                  : 'text-gray-600 hover:text-gray-300'
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                  : 'text-dim hover:text-muted'
               }`}
             >
               {r.label}
@@ -174,7 +182,7 @@ export default function StockChart({ ticker, range, onRangeChange, fill = false,
         {showCollapse && (
           <button
             onClick={onToggleCollapse}
-            className="w-6 h-6 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded-md text-faint hover:text-fg hover:bg-surface-2 transition-colors"
             title={collapsed ? 'Show chart' : 'Hide chart'}
           >
             {collapsed ? <CaretDown size={13} weight="bold" /> : <CaretUp size={13} weight="bold" />}
@@ -190,7 +198,7 @@ export default function StockChart({ ticker, range, onRangeChange, fill = false,
               key={r.id}
               onClick={() => onRangeChange(r.id)}
               className={`mono text-[10px] font-semibold px-2 py-1 rounded flex-shrink-0 transition-colors ${
-                range === r.id ? 'bg-amber-500/15 text-amber-400' : 'text-gray-600'
+                range === r.id ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'text-dim'
               }`}
             >
               {r.label}
@@ -204,13 +212,13 @@ export default function StockChart({ ticker, range, onRangeChange, fill = false,
         <div className={`relative px-1 pb-1 ${filling ? 'flex-1 min-h-0' : ''}`}>
           <div ref={containerRef} className={`w-full ${filling ? 'h-full' : 'h-[260px]'}`} />
           {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#0e0e0f]/70">
-              <span className="text-xs text-gray-600 mono">Loading {ticker}…</span>
+            <div className="absolute inset-0 flex items-center justify-center bg-bg/70">
+              <span className="text-xs text-dim mono">Loading {ticker}…</span>
             </div>
           )}
           {error && !loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#0e0e0f]">
-              <span className="text-xs text-gray-600">{error}</span>
+            <div className="absolute inset-0 flex items-center justify-center bg-bg">
+              <span className="text-xs text-dim">{error}</span>
             </div>
           )}
         </div>

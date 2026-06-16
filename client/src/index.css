@@ -3,6 +3,41 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── Theme tokens ──────────────────────────────────────────────────────────
+     Channels (space-separated RGB) so Tailwind opacity modifiers work, e.g.
+     bg-surface/70. Light is the default; dark applies via [data-theme="dark"]
+     on <html> (set pre-paint by the inline script in index.html). The amber
+     accent and green/red status colors are identical in both themes. */
+  :root {
+    color-scheme: light;
+    --bg: 245 245 247;          /* #f5f5f7  page */
+    --surface: 255 255 255;     /* #ffffff  cards / panels / inputs */
+    --surface-2: 236 236 239;   /* #ececef  hover / secondary */
+    --surface-3: 226 226 230;   /* #e2e2e6  highest */
+    --border: 229 229 231;      /* #e5e5e7 */
+    --border-strong: 210 210 215;/* #d2d2d7 */
+    --fg: 29 29 31;             /* #1d1d1f  primary text */
+    --muted: 110 110 115;       /* #6e6e73 */
+    --faint: 142 142 147;       /* #8e8e93 */
+    --dim: 174 174 178;         /* #aeaeb2  placeholders */
+    --accent: 245 158 11;       /* #f59e0b  amber — shared */
+  }
+
+  [data-theme='dark'] {
+    color-scheme: dark;
+    --bg: 12 12 13;             /* #0c0c0d */
+    --surface: 20 20 21;        /* #141415 */
+    --surface-2: 30 30 32;      /* #1e1e20 */
+    --surface-3: 40 40 43;      /* #28282b */
+    --border: 34 34 37;         /* #222225 */
+    --border-strong: 46 46 49;  /* #2e2e31 */
+    --fg: 250 250 250;          /* #fafafa */
+    --muted: 161 161 170;       /* #a1a1aa */
+    --faint: 113 113 122;       /* #71717a */
+    --dim: 82 82 91;            /* #52525b */
+    --accent: 245 158 11;       /* #f59e0b */
+  }
+
   * {
     box-sizing: border-box;
   }
@@ -13,12 +48,13 @@
   }
 
   body {
-    @apply bg-[#0c0c0d] text-gray-100;
+    @apply bg-bg text-fg;
     font-family: 'Satoshi', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   #root {
@@ -27,8 +63,8 @@
   }
 
   ::selection {
-    background: rgba(245, 158, 11, 0.35);
-    color: #fff;
+    background: rgb(var(--accent) / 0.35);
+    color: rgb(var(--fg));
   }
 
   /* iOS PWA safe area utilities */
@@ -47,13 +83,13 @@
     height: 5px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-[#0c0c0d];
+    @apply bg-bg;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-[#2a2a2c] rounded-full;
+    @apply bg-border-strong rounded-full;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-[#f59e0b];
+    @apply bg-accent;
   }
 }
 
@@ -64,17 +100,31 @@
   }
 
   .card {
-    @apply border border-[#222225] rounded-xl;
+    @apply border border-border rounded-xl;
+    background: rgb(var(--surface));
+  }
+  [data-theme='dark'] .card {
     background: linear-gradient(180deg, #151517 0%, #121213 100%);
   }
 
   .card-elevated {
-    @apply border border-[#28282b] rounded-xl;
+    @apply border border-border-strong rounded-xl;
+    background: rgb(var(--surface));
+    box-shadow: 0 4px 20px -8px rgba(0, 0, 0, 0.12);
+  }
+  [data-theme='dark'] .card-elevated {
     background: linear-gradient(180deg, #1a1a1d 0%, #151516 100%);
     box-shadow: 0 4px 20px -8px rgba(0, 0, 0, 0.5);
   }
 
+  /* Liquid-glass — light recipe (default) + dark recipe */
   .glass {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  [data-theme='dark'] .glass {
     background: rgba(18, 18, 20, 0.55);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
@@ -89,32 +139,52 @@
     color: transparent;
   }
 
+  /* Status badges — light defaults + dark overrides. Hue (green/red/amber/
+     purple) is identical in both themes; only the tint depth inverts. */
   .badge-long {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-900/50 text-emerald-400 border border-emerald-700/50;
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200;
+  }
+  [data-theme='dark'] .badge-long {
+    @apply bg-emerald-900/50 text-emerald-400 border-emerald-700/50;
   }
 
   .badge-short {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-900/50 text-red-400 border border-red-700/50;
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200;
+  }
+  [data-theme='dark'] .badge-short {
+    @apply bg-red-900/50 text-red-400 border-red-700/50;
   }
 
   .badge-call {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-900/40 text-amber-400 border border-amber-700/40;
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200;
+  }
+  [data-theme='dark'] .badge-call {
+    @apply bg-amber-900/40 text-amber-400 border-amber-700/40;
   }
 
   .badge-put {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-900/50 text-purple-400 border border-purple-700/50;
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200;
+  }
+  [data-theme='dark'] .badge-put {
+    @apply bg-purple-900/50 text-purple-400 border-purple-700/50;
   }
 
   .badge-hold {
-    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-[#222225] text-gray-300 border border-[#333336];
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-surface-2 text-muted border border-border-strong;
   }
 
   .badge-sell {
-    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-red-900/60 text-red-300 border border-red-700/50;
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-red-50 text-red-700 border border-red-200;
+  }
+  [data-theme='dark'] .badge-sell {
+    @apply bg-red-900/60 text-red-300 border-red-700/50;
   }
 
   .badge-caution {
-    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-amber-900/50 text-amber-300 border border-amber-700/50;
+    @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-amber-50 text-amber-700 border border-amber-200;
+  }
+  [data-theme='dark'] .badge-caution {
+    @apply bg-amber-900/50 text-amber-300 border-amber-700/50;
   }
 
   .btn-primary {
@@ -129,7 +199,7 @@
   }
 
   .btn-ghost {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-[#1e1e20] hover:bg-[#252527] text-gray-300 font-medium rounded-lg transition-all duration-150 active:scale-95 text-sm border border-[#2e2e31];
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-surface-2 hover:bg-surface-3 text-muted font-medium rounded-lg transition-all duration-150 active:scale-95 text-sm border border-border-strong;
   }
 
   .mono {
@@ -137,7 +207,8 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Subtle film-grain noise — apply to full-bleed surfaces (landing, auth) */
+  /* Subtle film-grain noise — apply to full-bleed surfaces (landing, auth).
+     Grain darkens the page in light (multiply) and lightens it in dark. */
   .noise-overlay {
     position: relative;
   }
@@ -147,19 +218,40 @@
     inset: 0;
     pointer-events: none;
     z-index: 1;
-    opacity: 0.03;
+    opacity: 0.045;
+    mix-blend-mode: multiply;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  [data-theme='dark'] .noise-overlay::after {
+    opacity: 0.03;
+    mix-blend-mode: normal;
+  }
+
+  /* Full-bleed grid overlay (landing / auth). Lines darken in light, lighten
+     in dark. Pair with a Tailwind bg-[size:NxN] utility for cell size. */
+  .grid-overlay {
+    background-image:
+      linear-gradient(rgba(0, 0, 0, 0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 0, 0, 0.022) 1px, transparent 1px);
+  }
+  [data-theme='dark'] .grid-overlay {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
   }
 
   /* Fine dot-grid texture for panel backgrounds */
   .dot-grid {
-    background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px);
     background-size: 22px 22px;
+  }
+  [data-theme='dark'] .dot-grid {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   }
 
   /* Mode pill toggle */
   .mode-pill {
-    @apply flex items-center bg-[#141415] border border-[#222225] rounded-lg p-0.5 gap-0.5;
+    @apply flex items-center bg-surface border border-border rounded-lg p-0.5 gap-0.5;
   }
 
   .mode-pill-btn {
@@ -167,17 +259,17 @@
   }
 
   .mode-pill-btn-inactive {
-    @apply text-gray-500 hover:text-gray-300;
+    @apply text-faint hover:text-muted;
   }
 
   /* Skeleton shimmer */
   .skeleton {
-    @apply bg-[#1e1e20] rounded animate-pulse;
+    @apply bg-surface-2 rounded animate-pulse;
   }
 
-  /* Dark input with amber focus glow */
+  /* Inset input field with amber focus glow */
   .input-dark {
-    @apply w-full bg-[#0c0c0d] border border-[#2a2a2c] rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-700 transition-all;
+    @apply w-full bg-bg border border-border-strong rounded-lg px-3 py-2.5 text-fg text-sm placeholder-dim transition-all;
   }
 
   .input-dark:focus {
@@ -197,7 +289,7 @@
   background:
     radial-gradient(40% 50% at 30% 35%, rgba(245, 158, 11, 0.16), transparent 70%),
     radial-gradient(45% 55% at 70% 60%, rgba(16, 185, 129, 0.10), transparent 70%),
-    #0c0c0d;
+    rgb(var(--bg));
   animation: aurora-drift 18s ease-in-out infinite;
   will-change: transform;
 }

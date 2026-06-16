@@ -26,23 +26,23 @@ function fmtPct(val: string): string {
 
 function plColor(val: string): string {
   const n = parseFloat(val);
-  if (isNaN(n) || n === 0) return 'text-gray-400';
-  return n > 0 ? 'text-emerald-400' : 'text-red-400';
+  if (isNaN(n) || n === 0) return 'text-muted';
+  return n > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400';
 }
 
 function statusBadge(status: string): JSX.Element {
   const configs: Record<string, { cls: string; label: string }> = {
-    filled: { cls: 'bg-emerald-900/50 border-emerald-700/40 text-emerald-400', label: 'Filled' },
-    partially_filled: { cls: 'bg-emerald-900/30 border-emerald-700/30 text-emerald-500', label: 'Partial' },
-    pending_new: { cls: 'bg-amber-900/50 border-amber-700/40 text-amber-400', label: 'Pending' },
-    new: { cls: 'bg-amber-900/50 border-amber-700/40 text-amber-400', label: 'Open' },
-    accepted: { cls: 'bg-amber-900/50 border-amber-700/40 text-amber-400', label: 'Open' },
-    cancelled: { cls: 'bg-gray-800/60 border-gray-700/40 text-gray-500', label: 'Cancelled' },
-    canceled: { cls: 'bg-gray-800/60 border-gray-700/40 text-gray-500', label: 'Cancelled' },
-    rejected: { cls: 'bg-red-900/50 border-red-700/40 text-red-400', label: 'Rejected' },
-    expired: { cls: 'bg-gray-800/60 border-gray-700/40 text-gray-500', label: 'Expired' },
+    filled: { cls: 'bg-emerald-50 dark:bg-emerald-900/50 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400', label: 'Filled' },
+    partially_filled: { cls: 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700/30 text-emerald-600 dark:text-emerald-500', label: 'Partial' },
+    pending_new: { cls: 'bg-amber-50 dark:bg-amber-900/50 border-amber-200 dark:border-amber-700/40 text-amber-600 dark:text-amber-400', label: 'Pending' },
+    new: { cls: 'bg-amber-50 dark:bg-amber-900/50 border-amber-200 dark:border-amber-700/40 text-amber-600 dark:text-amber-400', label: 'Open' },
+    accepted: { cls: 'bg-amber-50 dark:bg-amber-900/50 border-amber-200 dark:border-amber-700/40 text-amber-600 dark:text-amber-400', label: 'Open' },
+    cancelled: { cls: 'bg-surface-2 border-border-strong text-faint', label: 'Cancelled' },
+    canceled: { cls: 'bg-surface-2 border-border-strong text-faint', label: 'Cancelled' },
+    rejected: { cls: 'bg-red-50 dark:bg-red-900/50 border-red-200 dark:border-red-700/40 text-red-700 dark:text-red-400', label: 'Rejected' },
+    expired: { cls: 'bg-surface-2 border-border-strong text-faint', label: 'Expired' },
   };
-  const cfg = configs[status] ?? { cls: 'bg-gray-800/60 border-gray-700/40 text-gray-400', label: status };
+  const cfg = configs[status] ?? { cls: 'bg-surface-2 border-border-strong text-muted', label: status };
   return (
     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${cfg.cls}`}>{cfg.label}</span>
   );
@@ -97,18 +97,18 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
   const todayPL = equity - portfolioValue;
 
   return (
-    <div className="bg-[#141415] border border-[#222225] rounded-2xl overflow-hidden">
+    <div className="bg-surface border border-border rounded-2xl overflow-hidden">
       {/* Panel header */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-[#222225]">
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <h3 className="text-sm font-bold text-white">Paper Account</h3>
+          <h3 className="text-sm font-bold text-fg">Paper Account</h3>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={load}
             disabled={loading}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-400 hover:bg-[#1e1e20] transition-all"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-dim hover:text-muted hover:bg-surface-2 transition-all"
             title="Refresh"
           >
             <svg className={`w-4 h-4 ${loading ? 'spin-slow' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -118,7 +118,7 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
           {onClose && (
             <button
               onClick={onClose}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-400 hover:bg-[#1e1e20] transition-all"
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-dim hover:text-muted hover:bg-surface-2 transition-all"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -129,7 +129,7 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
       </div>
 
       {error && (
-        <div className="mx-4 mt-3 px-3 py-2 bg-red-950/30 border border-red-900/40 rounded-lg text-xs text-red-400">
+        <div className="mx-4 mt-3 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 rounded-lg text-xs text-red-700 dark:text-red-400">
           {error}
         </div>
       )}
@@ -138,23 +138,23 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
         {/* Account summary — 2x2 grid */}
         {account && (
           <div>
-            <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-2">Account Summary</div>
+            <div className="text-[10px] text-dim uppercase tracking-wider font-semibold mb-2">Account Summary</div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-[#111112] rounded-lg px-3 py-2.5">
-                <div className="text-[10px] text-gray-600 mb-0.5">Equity</div>
-                <div className="mono text-sm font-bold text-white">{fmtDollar(account.equity)}</div>
+              <div className="bg-bg rounded-lg px-3 py-2.5">
+                <div className="text-[10px] text-dim mb-0.5">Equity</div>
+                <div className="mono text-sm font-bold text-fg">{fmtDollar(account.equity)}</div>
               </div>
-              <div className="bg-[#111112] rounded-lg px-3 py-2.5">
-                <div className="text-[10px] text-gray-600 mb-0.5">Cash</div>
-                <div className="mono text-sm font-bold text-white">{fmtDollar(account.cash)}</div>
+              <div className="bg-bg rounded-lg px-3 py-2.5">
+                <div className="text-[10px] text-dim mb-0.5">Cash</div>
+                <div className="mono text-sm font-bold text-fg">{fmtDollar(account.cash)}</div>
               </div>
-              <div className="bg-[#111112] rounded-lg px-3 py-2.5">
-                <div className="text-[10px] text-gray-600 mb-0.5">Buying Power</div>
-                <div className="mono text-sm font-bold text-amber-400">{fmtDollar(account.buying_power)}</div>
+              <div className="bg-bg rounded-lg px-3 py-2.5">
+                <div className="text-[10px] text-dim mb-0.5">Buying Power</div>
+                <div className="mono text-sm font-bold text-amber-600 dark:text-amber-400">{fmtDollar(account.buying_power)}</div>
               </div>
-              <div className="bg-[#111112] rounded-lg px-3 py-2.5">
-                <div className="text-[10px] text-gray-600 mb-0.5">Today P&L</div>
-                <div className={`mono text-sm font-bold ${todayPL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <div className="bg-bg rounded-lg px-3 py-2.5">
+                <div className="text-[10px] text-dim mb-0.5">Today P&L</div>
+                <div className={`mono text-sm font-bold ${todayPL >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
                   {todayPL >= 0 ? '+' : ''}${Math.abs(todayPL).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
@@ -164,11 +164,11 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
 
         {/* Open Positions */}
         <div>
-          <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-2">
-            Open Positions {positions.length > 0 && <span className="text-gray-500">({positions.length})</span>}
+          <div className="text-[10px] text-dim uppercase tracking-wider font-semibold mb-2">
+            Open Positions {positions.length > 0 && <span className="text-faint">({positions.length})</span>}
           </div>
           {positions.length === 0 ? (
-            <div className="text-center py-6 text-gray-600 text-sm">
+            <div className="text-center py-6 text-dim text-sm">
               No open positions. Execute a trade from the scan results.
             </div>
           ) : (
@@ -177,22 +177,22 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
                 const isLong = pos.side === 'long';
                 const pl = parseFloat(pos.unrealized_pl);
                 return (
-                  <div key={pos.symbol} className="bg-[#111112] rounded-lg px-3 py-2.5 border border-[#222225]">
+                  <div key={pos.symbol} className="bg-bg rounded-lg px-3 py-2.5 border border-border">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
-                        <span className="mono font-bold text-white text-sm">{pos.symbol}</span>
+                        <span className="mono font-bold text-fg text-sm">{pos.symbol}</span>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                          isLong ? 'bg-emerald-900/50 border-emerald-700/40 text-emerald-400' : 'bg-red-900/50 border-red-700/40 text-red-400'
+                          isLong ? 'bg-emerald-50 dark:bg-emerald-900/50 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-900/50 border-red-200 dark:border-red-700/40 text-red-700 dark:text-red-400'
                         }`}>
                           {isLong ? 'LONG' : 'SHORT'}
                         </span>
-                        <span className="mono text-xs text-gray-500">{pos.qty} shares</span>
+                        <span className="mono text-xs text-faint">{pos.qty} shares</span>
                       </div>
                       <span className={`mono text-sm font-bold ${plColor(pos.unrealized_pl)}`}>
                         {pl >= 0 ? '+' : ''}{fmtDollar(pos.unrealized_pl)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-xs mono text-gray-500">
+                    <div className="flex items-center justify-between text-xs mono text-faint">
                       <span>Avg {fmtDollar(pos.avg_entry_price)}</span>
                       <span>Now {fmtDollar(pos.current_price)}</span>
                       <span className={plColor(pos.unrealized_plpc)}>{fmtPct(pos.unrealized_plpc)}</span>
@@ -207,7 +207,7 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
         {/* Recent Orders */}
         {orders.length > 0 && (
           <div>
-            <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-2">Recent Orders</div>
+            <div className="text-[10px] text-dim uppercase tracking-wider font-semibold mb-2">Recent Orders</div>
             <div className="space-y-1.5">
               {orders.slice(0, 10).map((order) => {
                 const canCancel = ['new', 'accepted', 'pending_new'].includes(order.status);
@@ -216,26 +216,26 @@ export default function PaperTradingPanel({ visible, onClose }: Props) {
                   minute: '2-digit',
                 });
                 return (
-                  <div key={order.id} className="bg-[#111112] rounded-lg px-3 py-2 border border-[#222225]">
+                  <div key={order.id} className="bg-bg rounded-lg px-3 py-2 border border-border">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="mono font-bold text-white text-sm">{order.symbol}</span>
-                        <span className={`text-[10px] font-semibold ${order.side === 'buy' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <span className="mono font-bold text-fg text-sm">{order.symbol}</span>
+                        <span className={`text-[10px] font-semibold ${order.side === 'buy' ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
                           {order.side.toUpperCase()}
                         </span>
-                        <span className="mono text-xs text-gray-500">{order.qty}</span>
+                        <span className="mono text-xs text-faint">{order.qty}</span>
                         {statusBadge(order.status)}
                       </div>
                       <div className="flex items-center gap-2">
                         {order.filled_avg_price && (
-                          <span className="mono text-xs text-gray-400">{fmtDollar(order.filled_avg_price)}</span>
+                          <span className="mono text-xs text-muted">{fmtDollar(order.filled_avg_price)}</span>
                         )}
-                        <span className="text-[10px] text-gray-600">{submittedAt}</span>
+                        <span className="text-[10px] text-dim">{submittedAt}</span>
                         {canCancel && (
                           <button
                             onClick={() => handleCancel(order.id)}
                             disabled={cancellingId === order.id}
-                            className="text-[10px] text-red-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                            className="text-[10px] text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 transition-colors disabled:opacity-50"
                           >
                             Cancel
                           </button>

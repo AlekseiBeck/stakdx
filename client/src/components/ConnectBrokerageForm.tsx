@@ -37,14 +37,14 @@ export default function ConnectBrokerageForm({ onConnected }: Props) {
     <div className="space-y-5">
       {/* Account type pills */}
       <div>
-        <div className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold mb-2">Account Type</div>
+        <div className="text-[10px] text-dim uppercase tracking-wider font-semibold mb-2">Account Type</div>
         <div className="flex gap-2">
           <button
             onClick={() => setAccountType('paper')}
             className={`flex-1 py-2 px-3 rounded-lg border text-sm font-semibold transition-all ${
               accountType === 'paper'
-                ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-400'
-                : 'bg-[#111112] border-[#222225] text-gray-500 hover:border-[#333336] hover:text-gray-400'
+                ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-700/60 text-emerald-700 dark:text-emerald-400'
+                : 'bg-bg border-border text-faint hover:border-border-strong hover:text-muted'
             }`}
           >
             Paper Trading
@@ -53,15 +53,15 @@ export default function ConnectBrokerageForm({ onConnected }: Props) {
             onClick={() => setAccountType('live')}
             className={`flex-1 py-2 px-3 rounded-lg border text-sm font-semibold transition-all ${
               accountType === 'live'
-                ? 'bg-red-950/60 border-red-700/60 text-red-400'
-                : 'bg-[#111112] border-[#222225] text-gray-500 hover:border-[#333336] hover:text-gray-400'
+                ? 'bg-red-50 dark:bg-red-950/60 border-red-200 dark:border-red-700/60 text-red-700 dark:text-red-400'
+                : 'bg-bg border-border text-faint hover:border-border-strong hover:text-muted'
             }`}
           >
             Live Trading
           </button>
         </div>
         {accountType === 'live' && (
-          <p className="text-[11px] text-amber-400 mt-2">
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
             Live trading uses real money. Paper trading is recommended for testing.
           </p>
         )}
@@ -69,7 +69,7 @@ export default function ConnectBrokerageForm({ onConnected }: Props) {
 
       {/* API Key input */}
       <div>
-        <label className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold block mb-1.5">
+        <label className="text-[10px] text-dim uppercase tracking-wider font-semibold block mb-1.5">
           API Key
         </label>
         <div className="relative">
@@ -79,12 +79,12 @@ export default function ConnectBrokerageForm({ onConnected }: Props) {
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="PKXXXXXXXXXXXXXXXXXXXXX"
             autoComplete="off"
-            className="w-full bg-[#111112] border border-[#222225] rounded-lg px-3 py-2.5 pr-10 text-white mono text-sm focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-700"
+            className="w-full bg-bg border border-border rounded-lg px-3 py-2.5 pr-10 text-fg mono text-sm focus:outline-none focus:border-amber-500/60 transition-colors placeholder-dim"
           />
           <button
             type="button"
             onClick={() => setShowApiKey((v) => !v)}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400 transition-colors"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-dim hover:text-muted transition-colors"
           >
             {showApiKey ? (
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -102,7 +102,7 @@ export default function ConnectBrokerageForm({ onConnected }: Props) {
 
       {/* Secret Key input */}
       <div>
-        <label className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold block mb-1.5">
+        <label className="text-[10px] text-dim uppercase tracking-wider font-semibold block mb-1.5">
           Secret Key
         </label>
         <div className="relative">
@@ -112,12 +112,12 @@ export default function ConnectBrokerageForm({ onConnected }: Props) {
             onChange={(e) => setSecretKey(e.target.value)}
             placeholder="Enter your Alpaca secret key"
             autoComplete="off"
-            className="w-full bg-[#111112] border border-[#222225] rounded-lg px-3 py-2.5 pr-10 text-white mono text-sm focus:outline-none focus:border-amber-500/60 transition-colors placeholder-gray-700"
+            className="w-full bg-bg border border-border rounded-lg px-3 py-2.5 pr-10 text-fg mono text-sm focus:outline-none focus:border-amber-500/60 transition-colors placeholder-dim"
           />
           <button
             type="button"
             onClick={() => setShowSecretKey((v) => !v)}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400 transition-colors"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-dim hover:text-muted transition-colors"
           >
             {showSecretKey ? (
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -135,21 +135,21 @@ export default function ConnectBrokerageForm({ onConnected }: Props) {
 
       {/* Error message */}
       {error && (
-        <div className="flex items-start gap-2 px-3 py-2.5 bg-red-950/30 border border-red-900/40 rounded-lg">
-          <svg className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+        <div className="flex items-start gap-2 px-3 py-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 rounded-lg">
+          <svg className="w-4 h-4 text-red-700 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
           </svg>
-          <p className="text-sm text-red-400">{error}</p>
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         </div>
       )}
 
       {/* Success message */}
       {success && (
-        <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-950/30 border border-emerald-900/40 rounded-lg">
-          <svg className="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 rounded-lg">
+          <svg className="w-4 h-4 text-emerald-700 dark:text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-sm text-emerald-400 font-semibold">
+          <p className="text-sm text-emerald-700 dark:text-emerald-400 font-semibold">
             Connected to {accountType === 'paper' ? 'Paper' : 'Live'} Account
           </p>
         </div>
@@ -175,7 +175,7 @@ export default function ConnectBrokerageForm({ onConnected }: Props) {
         )}
       </button>
 
-      <p className="text-[11px] text-gray-600 text-center">
+      <p className="text-[11px] text-dim text-center">
         Get your API keys at{' '}
         <a
           href="https://app.alpaca.markets/paper-accounts"

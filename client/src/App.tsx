@@ -24,7 +24,7 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#0c0c0d] flex items-center justify-center">
+      <div className="min-h-screen bg-bg flex items-center justify-center">
         <CircleNotch size={32} weight="bold" className="text-amber-500 spin-slow" />
       </div>
     );
@@ -217,7 +217,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const scanContent = (
     <div className="space-y-3">
       {scanError && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-red-950/30 border border-red-900/40 rounded-xl text-sm text-red-400">
+        <div className="flex items-center gap-3 px-4 py-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 rounded-xl text-sm text-red-700 dark:text-red-400">
           <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
           </svg>
@@ -228,14 +228,14 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
       <div className="flex items-center gap-2 flex-wrap">
         <ModeSwitcher mode={mode} onChange={setMode} />
         <div className="relative">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 mono text-xs pointer-events-none">$</span>
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-dim mono text-xs pointer-events-none">$</span>
           <input
             type="text"
             inputMode="numeric"
             value={buyingPower}
             onChange={(e) => setBuyingPower(e.target.value.replace(/[^0-9.,]/g, ''))}
             placeholder="Buying power"
-            className="w-32 bg-[#141415] border border-[#222225] rounded-lg pl-6 pr-3 py-1.5 text-white mono text-xs focus:outline-none focus:border-amber-500/60 focus:shadow-[0_0_0_3px_rgba(245,158,11,0.1)] transition-all placeholder-gray-700"
+            className="w-32 bg-surface border border-border rounded-lg pl-6 pr-3 py-1.5 text-fg mono text-xs focus:outline-none focus:border-amber-500/60 focus:shadow-[0_0_0_3px_rgba(245,158,11,0.1)] transition-all placeholder-dim"
           />
         </div>
         <button onClick={handleScan} disabled={isScanning} className="btn-primary text-sm py-2">
@@ -247,19 +247,19 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
 
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-bold text-white">
+          <h2 className="text-sm font-bold text-fg">
             Scan Results
             {recommendations.length > 0 && (
-              <span className="text-xs font-normal text-gray-500 ml-2">{recommendations.length} setups</span>
+              <span className="text-xs font-normal text-faint ml-2">{recommendations.length} setups</span>
             )}
           </h2>
-          <p className="text-[11px] text-gray-600 mt-0.5">
+          <p className="text-[11px] text-dim mt-0.5">
             {mode === 'both' ? 'All directions' : mode === 'long' ? 'Long / Call bias' : 'Short / Put bias'} · 1–3 day holds
             {lastScanTime && <> · last scan {lastScanTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</>}
           </p>
         </div>
         {isMockData && recommendations.length > 0 && (
-          <span className="text-xs text-amber-400 bg-amber-950/30 border border-amber-900/40 px-2.5 py-1 rounded-lg">Demo</span>
+          <span className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 px-2.5 py-1 rounded-lg">Demo</span>
         )}
       </div>
       <RecommendationsTable
@@ -307,7 +307,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#0c0c0d] overflow-hidden">
+    <div className="h-full flex flex-col bg-bg overflow-hidden">
       <Header
         isMockData={isMockData}
         userEmail={userEmail}
@@ -318,7 +318,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
       {/* ── Desktop (≥1024px): chat left + sidebar right ─────────────────────── */}
       <div className="hidden lg:flex flex-1 overflow-hidden">
         {/* Chat — grows to fill whatever the right panel doesn't use */}
-        <div className="flex-1 min-w-0 flex flex-col overflow-hidden border-r border-[#222225]">
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden border-r border-border">
           <ChatPanel positions={positions} scanResults={recommendations} news={news} prices={prices} candleSummaries={candleSummaries} tickerNews={tickerNews} newsAPIArticles={newsAPIArticles} />
         </div>
 
@@ -332,11 +332,11 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
             style={{ width: '33.333vw' }}
           >
             {/* Pill tabs */}
-            <div className="flex items-center gap-1.5 px-4 h-12 border-b border-[#222225] flex-shrink-0">
+            <div className="flex items-center gap-1.5 px-4 h-12 border-b border-border flex-shrink-0">
               <button
                 onClick={() => setSidebarCollapsed(true)}
                 title="Collapse panel"
-                className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors flex-shrink-0"
+                className="w-7 h-7 flex items-center justify-center rounded-md text-faint hover:text-fg hover:bg-surface-2 transition-colors flex-shrink-0"
               >
                 <CaretRight size={16} weight="bold" />
               </button>
@@ -349,13 +349,13 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                       sidebarPanel === tab
                         ? 'bg-gradient-to-b from-amber-400 to-amber-500 text-black shadow-[0_2px_12px_-3px_rgba(245,158,11,0.6)]'
-                        : 'bg-[#141415] border border-[#222225] text-gray-500 hover:text-gray-300 hover:border-[#2e2e32]'
+                        : 'bg-surface border border-border text-faint hover:text-muted hover:border-border-strong'
                     }`}
                   >
                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
                     {badge > 0 && (
                       <span className={`text-[10px] font-bold px-1.5 rounded-full ${
-                        sidebarPanel === tab ? 'bg-black/20 text-black' : 'bg-[#222225] text-gray-600'
+                        sidebarPanel === tab ? 'bg-black/20 text-black' : 'bg-surface-3 text-dim'
                       }`}>{badge}</span>
                     )}
                   </button>
@@ -369,15 +369,15 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
           </div>
 
           {/* Collapsed icon rail — overlays the left edge, fades in/out with the width animation */}
-          <div className={`absolute inset-y-0 left-0 w-12 flex flex-col items-center gap-1 bg-[#0c0c0d] py-3 transition-opacity duration-200 ${sidebarCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`absolute inset-y-0 left-0 w-12 flex flex-col items-center gap-1 bg-bg py-3 transition-opacity duration-200 ${sidebarCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <button
               onClick={() => setSidebarCollapsed(false)}
               title="Expand panel"
-              className="w-8 h-8 flex items-center justify-center rounded-md text-gray-500 hover:text-white hover:bg-[#1e1e20] transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-md text-faint hover:text-fg hover:bg-surface-2 transition-colors"
             >
               <CaretLeft size={16} weight="bold" />
             </button>
-            <div className="w-6 h-px bg-[#222225] my-1.5" />
+            <div className="w-6 h-px bg-surface-3 my-1.5" />
             {([
               { id: 'scan' as SidePanel, Icon: RadioButton },
               { id: 'positions' as SidePanel, Icon: Briefcase },
@@ -390,7 +390,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
                   onClick={() => { setSidebarPanel(id); setSidebarCollapsed(false); }}
                   title={id.charAt(0).toUpperCase() + id.slice(1)}
                   className={`relative w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
-                    sidebarPanel === id ? 'text-amber-500 bg-amber-500/10' : 'text-gray-500 hover:text-white hover:bg-[#1e1e20]'
+                    sidebarPanel === id ? 'text-amber-500 bg-amber-500/10' : 'text-faint hover:text-fg hover:bg-surface-2'
                   }`}
                 >
                   <Icon size={18} weight={sidebarPanel === id ? 'duotone' : 'regular'} />
@@ -418,7 +418,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
         </div>
 
         {/* Bottom tab bar */}
-        <div className="flex-shrink-0 border-t border-[#222225] bg-[#0c0c0d]">
+        <div className="flex-shrink-0 border-t border-border bg-bg">
           <div className="flex">
           {([
             { id: 'chat', label: 'Chat', Icon: ChatCircleDots },
@@ -433,7 +433,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
                 key={id}
                 onClick={() => setMobileTab(id)}
                 className={`relative flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors ${
-                  active ? 'text-amber-500' : 'text-gray-600'
+                  active ? 'text-amber-500' : 'text-dim'
                 }`}
               >
                 {active && (
@@ -443,7 +443,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
                 <span className="text-[10px] font-semibold leading-none">{label}</span>
                 {badge > 0 && (
                   <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
-                    active ? 'bg-amber-500/20 text-amber-400' : 'bg-[#1e1e20] text-gray-600'
+                    active ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-surface-2 text-dim'
                   }`}>{badge}</span>
                 )}
               </button>
