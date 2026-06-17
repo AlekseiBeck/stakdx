@@ -95,12 +95,14 @@ function MiniRing({ value, color = '#10b981', textClass = 'text-emerald-700 dark
 /* Static product mockup for the hero — mirrors the dashboard's card language */
 function HeroPreview() {
   return (
-    <div className="relative mx-auto w-full max-w-md" aria-hidden="true">
+    <div className="relative isolate mx-auto w-full max-w-md" aria-hidden="true">
       <div className="absolute -inset-10 bg-amber-500/[0.08] blur-3xl rounded-full pointer-events-none" />
 
-      {/* TSLA short card — tucked behind */}
-      <div className="hero-card absolute -top-12 -right-2 sm:-right-10 w-60 hidden sm:block">
-        <div className="float-b glass rounded-xl p-3.5 rotate-2 opacity-90">
+      {/* TSLA short card — tucked behind. Explicit z-index (not z-auto) so the
+          glass backdrop-filter layers keep a stable order during the GSAP
+          entrance and don't briefly render in front of the NVDA card. */}
+      <div className="hero-card absolute z-0 -top-12 -right-2 sm:-right-10 w-60 hidden sm:block">
+        <div className="float-b glass rounded-xl p-3.5 rotate-2 opacity-90 shadow-card">
           <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-2">
               <span className="mono text-sm font-bold text-fg">TSLA</span>
@@ -118,7 +120,7 @@ function HeroPreview() {
 
       {/* NVDA long card — front and center */}
       <div className="hero-card relative z-10">
-        <div className="float-a glass rounded-2xl p-5 shadow-2xl shadow-black/60">
+        <div className="float-a glass rounded-2xl p-5 shadow-pop">
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2.5">
               <span className="mono text-2xl font-bold text-fg tracking-tight">NVDA</span>
@@ -154,7 +156,7 @@ function HeroPreview() {
 
       {/* Chat snippet — overlapping below */}
       <div className="hero-card relative z-20 -mt-3 ml-8 sm:ml-16 max-w-sm">
-        <div className="float-b glass rounded-xl p-4 space-y-3 shadow-xl shadow-black/50">
+        <div className="float-b glass rounded-xl p-4 space-y-3 shadow-pop">
           <div className="flex justify-end">
             <span className="bg-surface-3 text-fg text-xs px-3 py-1.5 rounded-2xl rounded-br-sm">
               Should I hold NVDA through earnings?
@@ -329,7 +331,7 @@ export default function AuthPage() {
             {FEATURES.map((f) => (
               <div
                 key={f.title}
-                className="scroll-reveal group glass rounded-2xl p-6 transition-all duration-300 hover:border-amber-500/30 hover:-translate-y-1"
+                className="scroll-reveal group glass shadow-card rounded-2xl p-6 transition-all duration-300 hover:border-amber-500/30 hover:-translate-y-1"
               >
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 mb-4 transition-all duration-300 group-hover:bg-amber-500/20 group-hover:shadow-[0_0_20px_-4px_rgba(245,158,11,0.5)]">
                   {f.icon}
@@ -348,7 +350,7 @@ export default function AuthPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {STEPS.map((s, i) => (
-              <div key={s.num} className="scroll-reveal relative glass rounded-2xl p-6">
+              <div key={s.num} className="scroll-reveal relative glass shadow-card rounded-2xl p-6">
                 <div className="flex items-center gap-3 mb-3">
                   <span className="mono text-sm font-bold text-gradient-amber">{s.num}</span>
                   <span className="flex-1 h-px bg-gradient-to-r from-amber-500/30 to-transparent" />
@@ -365,7 +367,7 @@ export default function AuthPage() {
 
         {/* Final CTA */}
         <section className="relative z-10 max-w-4xl mx-auto px-6 py-20">
-          <div className="scroll-reveal relative glass rounded-3xl px-8 py-14 text-center overflow-hidden">
+          <div className="scroll-reveal relative glass shadow-card rounded-3xl px-8 py-14 text-center overflow-hidden">
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[420px] h-[260px] bg-amber-500/15 blur-[90px] rounded-full pointer-events-none" />
             <div className="relative">
               <div className="flex justify-center mb-5"><StakdxLogo size="h-12" /></div>

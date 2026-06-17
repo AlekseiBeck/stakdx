@@ -94,7 +94,7 @@ export default function RecommendationCard({ rec, index, price, onAddPosition, b
 
   return (
     <div
-      className={`card-elevated fade-in-up relative overflow-hidden cursor-pointer transition-all duration-200 hover:border-border-strong hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-10px_rgba(0,0,0,0.7)] ${expanded ? 'border-border-strong' : ''}`}
+      className={`card-elevated fade-in-up relative overflow-hidden cursor-pointer transition-all duration-200 hover:border-border-strong hover:-translate-y-0.5 hover:shadow-pop ${expanded ? 'border-border-strong' : ''}`}
       style={{ animationDelay: `${Math.min(index * 60, 400)}ms`, opacity: 0 }}
       onClick={() => setExpanded((v) => !v)}
     >

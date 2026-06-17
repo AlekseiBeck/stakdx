@@ -959,7 +959,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
               {layoutMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setLayoutMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1.5 z-50 p-2 rounded-lg bg-surface border border-border-strong shadow-xl shadow-black/40 grid grid-cols-[auto_auto] gap-2">
+                  <div className="absolute right-0 top-full mt-1.5 z-50 p-2 rounded-lg bg-surface border border-border-strong shadow-pop grid grid-cols-[auto_auto] gap-2">
                     {LAYOUT_OPTIONS.map(opt => (
                       <button
                         key={opt.key}

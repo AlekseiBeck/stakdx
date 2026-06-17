@@ -30,6 +30,12 @@ export default {
       fontFamily: {
         mono: ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'monospace'],
       },
+      boxShadow: {
+        // Theme-aware elevation tokens (channels in index.css). `card` = resting
+        // panels; `pop` = floating overlays (modals, dropdowns, hero cards).
+        card: 'var(--shadow-card)',
+        pop: 'var(--shadow-pop)',
+      },
     },
   },
   plugins: [],

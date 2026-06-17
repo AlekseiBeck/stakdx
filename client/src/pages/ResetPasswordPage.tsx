@@ -47,7 +47,7 @@ export default function ResetPasswordPage() {
           <h1 className="text-2xl font-bold text-fg">Stakdx</h1>
         </div>
 
-        <div className="card p-6 shadow-2xl shadow-black/50">
+        <div className="card p-6 shadow-pop">
           <h2 className="text-lg font-bold text-fg mb-1">Set new password</h2>
           <p className="text-faint text-sm mb-5">Choose a new password for your account.</p>
 

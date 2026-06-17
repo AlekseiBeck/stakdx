@@ -74,7 +74,7 @@ export default function AccountSettingsModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl max-h-[85vh] overflow-y-auto bg-surface border border-border rounded-2xl shadow-2xl"
+        className="w-full max-w-xl max-h-[85vh] overflow-y-auto bg-surface border border-border rounded-2xl shadow-pop"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
