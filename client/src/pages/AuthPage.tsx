@@ -224,7 +224,14 @@ export default function AuthPage() {
 
     const ctx = gsap.context(() => {
       gsap.from('.hero-reveal', { y: 28, opacity: 0, duration: 0.8, ease: 'power3.out', stagger: 0.1, delay: 0.1 });
-      gsap.from('.hero-card', { y: 36, opacity: 0, scale: 0.97, duration: 0.9, ease: 'power3.out', stagger: 0.15, delay: 0.45 });
+      // The hero cards overlap and are translucent glass, so opacity must fade
+      // them in *together* (no stagger). A staggered opacity fade gives the cards
+      // unequal opacity mid-entrance, and the more-opaque card visually dominates
+      // the overlap — reading as a wrong stacking order that "snaps" right once
+      // opacities equalize. Keep the rise/scale staggered for the cascade; fade
+      // uniformly so the painted order (TSLA behind, chat in front) reads correctly.
+      gsap.from('.hero-card', { y: 36, scale: 0.97, duration: 0.9, ease: 'power3.out', stagger: 0.15, delay: 0.45 });
+      gsap.from('.hero-card', { opacity: 0, duration: 0.7, ease: 'power2.out', delay: 0.45 });
       gsap.to('.float-a', { y: -10, duration: 3.4, ease: 'sine.inOut', yoyo: true, repeat: -1, delay: 1.4 });
       gsap.to('.float-b', { y: -7, duration: 2.8, ease: 'sine.inOut', yoyo: true, repeat: -1, delay: 1.8 });
 
