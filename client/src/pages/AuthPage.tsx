@@ -21,7 +21,7 @@ const FEATURES = [
   {
     icon: <RadioButton size={20} weight="duotone" />,
     title: 'Daily Market Scan',
-    desc: 'AI screens the entire US market every morning and surfaces the highest-conviction swing setups — long, short, calls, and puts.',
+    desc: 'AI screens the entire US market every morning and surfaces the highest-conviction trade setups — long, short, calls, and puts.',
   },
   {
     icon: <BellRinging size={20} weight="duotone" />,
@@ -98,11 +98,14 @@ function HeroPreview() {
     <div className="relative isolate mx-auto w-full max-w-md" aria-hidden="true">
       <div className="absolute -inset-10 bg-amber-500/[0.08] blur-3xl rounded-full pointer-events-none" />
 
-      {/* TSLA short card — tucked behind. Explicit z-index (not z-auto) so the
-          glass backdrop-filter layers keep a stable order during the GSAP
-          entrance and don't briefly render in front of the NVDA card. */}
+      {/* TSLA short card — tucked behind. These mockup cards are SOLID (not
+          .glass): overlapping translucent backdrop-filter layers that animate
+          on entrance can be composited out of order by the GPU for the first
+          ~second (a depth "snap"), and a solid surface also matches the real
+          dashboard's card language. Explicit z-index + isolate on the parent
+          keep the paint order deterministic. */}
       <div className="hero-card absolute z-0 -top-12 -right-2 sm:-right-10 w-60 hidden sm:block">
-        <div className="float-b glass rounded-xl p-3.5 rotate-2 opacity-90 shadow-card">
+        <div className="float-b bg-surface border border-border-strong rounded-xl p-3.5 rotate-2 opacity-90 shadow-card">
           <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-2">
               <span className="mono text-sm font-bold text-fg">TSLA</span>
@@ -120,7 +123,7 @@ function HeroPreview() {
 
       {/* NVDA long card — front and center */}
       <div className="hero-card relative z-10">
-        <div className="float-a glass rounded-2xl p-5 shadow-pop">
+        <div className="float-a bg-surface border border-border-strong rounded-2xl p-5 shadow-pop">
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2.5">
               <span className="mono text-2xl font-bold text-fg tracking-tight">NVDA</span>
@@ -156,7 +159,7 @@ function HeroPreview() {
 
       {/* Chat snippet — overlapping below */}
       <div className="hero-card relative z-20 -mt-3 ml-8 sm:ml-16 max-w-sm">
-        <div className="float-b glass rounded-xl p-4 space-y-3 shadow-pop">
+        <div className="float-b bg-surface border border-border-strong rounded-xl p-4 space-y-3 shadow-pop">
           <div className="flex justify-end">
             <span className="bg-surface-3 text-fg text-xs px-3 py-1.5 rounded-2xl rounded-br-sm">
               Should I hold NVDA through earnings?
@@ -330,9 +333,9 @@ export default function AuthPage() {
         <section className="relative z-10 max-w-6xl mx-auto px-6 py-20">
           <div className="scroll-reveal text-center mb-12">
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-fg tracking-tight mb-3">
-              Everything you need to <span className="text-gradient-amber">swing trade</span>
+              Everything you need to <span className="text-gradient-amber">trade with conviction</span>
             </h2>
-            <p className="text-faint max-w-lg mx-auto">One dashboard for scanning, tracking, alerting, and executing — powered by AI-driven decision-making.</p>
+            <p className="text-faint max-w-lg mx-auto">AI market predictions, deep stock research, and clear buy-or-pass calls — one dashboard that turns analysis into better trades.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {FEATURES.map((f) => (
