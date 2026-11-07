@@ -1,0 +1,13 @@
+name: Supabase keep-alive
+on:
+  schedule:
+    - cron: '0 12 */3 * *'   # 12:00 UTC every 3 days
+  workflow_dispatch:          # adds a "Run workflow" button for manual runs
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsS "${{ secrets.SUPABASE_URL }}/rest/v1/chat_sessions?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
