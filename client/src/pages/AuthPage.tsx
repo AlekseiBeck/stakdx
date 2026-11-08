@@ -20,8 +20,8 @@ function StakdxLogo({ size = 'h-8' }: { size?: string }) {
 const FEATURES = [
   {
     icon: <RadioButton size={20} weight="duotone" />,
-    title: 'Daily Market Scan',
-    desc: 'AI screens the entire US market every morning and surfaces the highest-conviction trade setups — long, short, calls, and puts.',
+    title: 'AI Market Scan',
+    desc: 'One click screens a curated universe of liquid US tickers and surfaces the highest-conviction trade setups — long, short, calls, and puts.',
   },
   {
     icon: <BellRinging size={20} weight="duotone" />,
@@ -44,7 +44,7 @@ const STEPS = [
   {
     num: '01',
     title: 'Run the scan',
-    desc: 'One click screens thousands of US-listed tickers and enriches the top candidates with news, sentiment, earnings, and volume data.',
+    desc: 'One click scores a curated universe of liquid US tickers and enriches the top candidates with news, sentiment, earnings, and volume data.',
   },
   {
     num: '02',
@@ -104,7 +104,7 @@ function HeroPreview() {
           ~second (a depth "snap"), and a solid surface also matches the real
           dashboard's card language. Explicit z-index + isolate on the parent
           keep the paint order deterministic. */}
-      <div className="hero-card absolute z-0 -top-12 -right-2 sm:-right-10 w-60 hidden sm:block">
+      <div className="hero-card absolute z-0 -top-12 -right-2 sm:-right-10 lg:-right-2 xl:-right-10 w-60 hidden sm:block">
         <div className="float-b bg-surface border border-border-strong rounded-xl p-3.5 rotate-2 opacity-90 shadow-card">
           <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-2">
@@ -251,7 +251,7 @@ export default function AuthPage() {
 
   if (mode === 'landing') {
     return (
-      <div ref={landingRef} className="relative h-full overflow-y-auto bg-bg noise-overlay">
+      <div ref={landingRef} className="relative h-full overflow-y-auto overflow-x-hidden bg-bg noise-overlay">
         {/* Animated background — fixed behind everything */}
         <div className="fixed inset-0 pointer-events-none">
           <Suspense fallback={null}>
@@ -284,7 +284,7 @@ export default function AuthPage() {
         </nav>
 
         {/* Hero */}
-        <section className="relative z-10 max-w-6xl mx-auto px-6 pt-14 sm:pt-20 pb-16 lg:pb-24 grid lg:grid-cols-2 gap-14 lg:gap-10 items-center min-h-[82vh]">
+        <section className="relative z-10 max-w-6xl mx-auto px-6 pt-14 sm:pt-20 pb-16 lg:pb-24 grid grid-cols-1 lg:grid-cols-2 gap-14 lg:gap-10 items-center min-h-[82vh]">
           <div className="text-center lg:text-left">
             <h1 className="hero-reveal font-display text-5xl sm:text-6xl font-bold text-fg tracking-tight leading-[1.05] mb-5 mt-2">
               Trade with<br />an <span className="text-gradient-amber">edge.</span>
@@ -292,7 +292,7 @@ export default function AuthPage() {
             <p className="hero-reveal text-muted text-lg max-w-md mx-auto lg:mx-0 mb-8 leading-relaxed">
               Daily AI setups, real-time stop & target alerts, and a market-aware AI you can actually talk to.
             </p>
-            <div className="hero-reveal flex items-center justify-center lg:justify-start gap-3 mb-5">
+            <div className="hero-reveal flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-5">
               <button onClick={() => reset('signup')} className="btn-primary text-sm sm:text-base px-5 sm:px-7 py-3 whitespace-nowrap">
                 Get Started Free
               </button>
@@ -305,7 +305,7 @@ export default function AuthPage() {
             </div>
             <p className="hero-reveal text-xs text-dim mb-8">No credit card required</p>
             <div className="hero-reveal flex items-center justify-center lg:justify-start gap-5 text-xs text-faint">
-              <span><span className="mono font-bold text-muted">4,000+</span> tickers scanned</span>
+              <span><span className="mono font-bold text-muted">240+</span> tickers scored</span>
               <span className="w-px h-3 bg-border-strong" />
               <span><span className="mono font-bold text-muted">30</span> setups ranked</span>
               <span className="w-px h-3 bg-border-strong" />

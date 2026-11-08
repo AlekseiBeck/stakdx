@@ -160,8 +160,8 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 px-5 py-4 border-b border-border">
+        <div className="flex items-center gap-2 whitespace-nowrap">
           <svg className="w-4 h-4 text-faint" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
           </svg>
@@ -170,7 +170,7 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
             <span className="bg-amber-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">{positions.length}</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 [&>*]:whitespace-nowrap">
           {/* Notification toggle */}
           {notifStatus === 'subscribed' ? (
             <button
@@ -342,8 +342,8 @@ export default function PositionsPanel({ positions, onPositionClosed, onAddClick
 
             return (
               <div key={pos.id} className="p-5">
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 mb-3">
+                  <div className="flex items-center gap-3 min-w-0 grow basis-40">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="mono font-bold text-lg text-fg">{pos.ticker}</span>

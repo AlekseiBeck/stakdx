@@ -33,13 +33,39 @@ function getClient(): Anthropic {
 
 // ─── Models ──────────────────────────────────────────────────────────────────
 // Three tiers by how much each call's quality drives product value:
-//   SCAN_MODEL (Opus 4.8)  — the scan, our deepest prediction task. Worth the cost.
-//   CHAT_MODEL (Sonnet 4.6) — chat + position verdicts: interactive/bounded reasoning
+//   SCAN_MODEL (Opus 5.5)  — the scan, our deepest prediction task. Worth the cost.
+//   CHAT_MODEL (Sonnet 5.5) — position verdicts + scan triage: bounded reasoning
 //                             where Sonnet is nearly as strong, cheaper, and faster.
-//   FAST_MODEL (Haiku 4.5) — cheap pre-processing (macro regime, news scoring).
-const SCAN_MODEL = 'claude-opus-4-8';
-const CHAT_MODEL = 'claude-sonnet-4-6';
-const FAST_MODEL = 'claude-haiku-4-5-20251001';
+//   FAST_MODEL (Haiku 5.5) — cheap pre-processing (macro regime, news scoring).
+// The AI chat itself uses CHAT_MODEL_OPTIONS below — the trader picks the model and
+// reasoning effort in the chat input bar.
+// Opus 5.5 defaults to effort 'medium', so scan calls set 'high' explicitly. Haiku 5.5
+// thinks by default; its small classification calls disable it to stay fast and cheap.
+const SCAN_MODEL = 'claude-opus-5-5';
+const CHAT_MODEL = 'claude-sonnet-5-5';
+const FAST_MODEL = 'claude-haiku-5-5';
+
+// ─── AI chat: user-selectable model + reasoning effort ───────────────────────
+// Only these keys are accepted from the client (never a raw model ID).
+export const CHAT_MODEL_OPTIONS = {
+  opus: 'claude-opus-5-5',
+  sonnet: 'claude-sonnet-5-5',
+} as const;
+export type ChatModelKey = keyof typeof CHAT_MODEL_OPTIONS;
+export const CHAT_EFFORT_OPTIONS = ['low', 'medium', 'high', 'max'] as const;
+export type ChatEffort = typeof CHAT_EFFORT_OPTIONS[number];
+export interface ChatOptions { model: ChatModelKey; effort: ChatEffort }
+export const DEFAULT_CHAT_OPTIONS: ChatOptions = { model: 'opus', effort: 'medium' };
+
+// Validate client-supplied chat options; anything unrecognized falls back to the default.
+export function parseChatOptions(raw: unknown): ChatOptions {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as { model?: unknown; effort?: unknown };
+  const model = typeof o.model === 'string' && Object.prototype.hasOwnProperty.call(CHAT_MODEL_OPTIONS, o.model)
+    ? (o.model as ChatModelKey) : DEFAULT_CHAT_OPTIONS.model;
+  const effort = (CHAT_EFFORT_OPTIONS as readonly unknown[]).includes(o.effort)
+    ? (o.effort as ChatEffort) : DEFAULT_CHAT_OPTIONS.effort;
+  return { model, effort };
+}
 
 // ─── Structured output schemas ───────────────────────────────────────────────
 // Passed via output_config.format — the API guarantees the response text is valid
@@ -221,6 +247,7 @@ export async function expandNewsQuery(input: string): Promise<{ query: string; f
     const msg = await client.messages.create({
       model: FAST_MODEL,
       max_tokens: 400,
+      thinking: { type: 'disabled' },
       system:
         'You turn a retail trader\'s short news search into a comprehensive, research-grade ' +
         'NewsAPI /everything query. Given a ticker, company, sector, or theme, identify the full ' +
@@ -288,6 +315,7 @@ Classify the current market regime. topRisks should contain the 3 most material 
     const msg = await client.messages.create({
       model: FAST_MODEL,
       max_tokens: 600,
+      thinking: { type: 'disabled' },
       system: 'You are a macro market analyst. Classify the market regime from the data provided.',
       messages: [{ role: 'user', content: userMsg }],
       output_config: { format: MACRO_OUTPUT_FORMAT },
@@ -326,6 +354,7 @@ ${newsLines}`;
     const msg = await client.messages.create({
       model: FAST_MODEL,
       max_tokens: 1200,
+      thinking: { type: 'disabled' },
       system: 'You are a financial news analyst. Score each headline for its likely impact on stock prices.',
       messages: [{ role: 'user', content: userMsg }],
       output_config: { format: NEWS_SCORE_OUTPUT_FORMAT },
@@ -422,16 +451,17 @@ ${rows}
 Return exactly ${count} picks (or all candidates if fewer exist), ordered best-first, each with a one-line reason citing the specific signals that make it a high-conviction setup.`;
 
   try {
-    // No extended thinking here: this is a bounded selection over clear feature
-    // rows, and it gates the (slow) Opus batches — it must stay fast. The deep
-    // reasoning happens later in the Opus deep-dive. Structured output guarantees
+    // Minimal thinking here: this is a bounded selection over clear feature
+    // rows, and it gates the (slow) Opus batches — it must stay fast. Sonnet 5.5
+    // can't disable thinking, so effort 'low' keeps it brief. The deep reasoning
+    // happens later in the Opus deep-dive. Structured output guarantees
     // schema-valid JSON in the text block.
     const msg = await client.messages.create({
       model: CHAT_MODEL,
-      max_tokens: 4096,
+      max_tokens: 8000,
       system: 'You are a senior equities analyst triaging a swing-trade scan. Pick the highest-conviction setups from the technical features and market context provided. Be selective and decisive.',
       messages: [{ role: 'user', content: userMsg }],
-      output_config: { format: TRIAGE_OUTPUT_FORMAT },
+      output_config: { format: TRIAGE_OUTPUT_FORMAT, effort: 'low' },
     });
 
     const picks = (JSON.parse(responseText(msg)) as { picks: TriagePick[] }).picks ?? [];
@@ -761,7 +791,7 @@ export async function analyzeCandlesWithClaude(
         thinking: { type: 'adaptive' },
         system: cachedSystem,
         messages: [{ role: 'user', content: makeMsg(entries.slice(0, mid)) }],
-        output_config: { format: SCAN_OUTPUT_FORMAT },
+        output_config: { format: SCAN_OUTPUT_FORMAT, effort: 'high' },
       }),
       entries.slice(mid).length > 0
         ? client.messages.create({
@@ -770,7 +800,7 @@ export async function analyzeCandlesWithClaude(
             thinking: { type: 'adaptive' },
             system: cachedSystem,
             messages: [{ role: 'user', content: makeMsg(entries.slice(mid)) }],
-            output_config: { format: SCAN_OUTPUT_FORMAT },
+            output_config: { format: SCAN_OUTPUT_FORMAT, effort: 'high' },
           })
         : Promise.resolve(null),
     ]);
@@ -832,7 +862,7 @@ export async function analyzeBatchWithClaude(
       thinking: { type: 'adaptive' },
       system: [{ type: 'text', text: buildScanPrompt(), cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userMsg }],
-      output_config: { format: SCAN_OUTPUT_FORMAT },
+      output_config: { format: SCAN_OUTPUT_FORMAT, effort: 'high' },
     });
 
     const parsed = (JSON.parse(responseText(msg)) as { setups: TradeRecommendation[] }).setups ?? [];
@@ -840,8 +870,10 @@ export async function analyzeBatchWithClaude(
     if (focusDirections.length > 0) return parsed.filter(r => focusDirections.includes(r.direction));
     return parsed;
   } catch (err) {
+    // Don't swallow into [] — that's indistinguishable from "no setups qualified".
+    // Let the scan handler surface the failure so the UI can say so honestly.
     console.error('[claude] Batch scan error:', err);
-    return [];
+    throw err;
   }
 }
 
@@ -1002,7 +1034,8 @@ ${candleSection}`;
 
 export async function* streamChat(
   messages: ChatMessage[],
-  ctx: ChatContext
+  ctx: ChatContext,
+  options: ChatOptions = DEFAULT_CHAT_OPTIONS
 ): AsyncGenerator<string> {
   if (!hasAnthropicKey()) {
     yield "I'm running in demo mode — add your ANTHROPIC_API_KEY to enable live AI chat.";
@@ -1026,9 +1059,11 @@ export async function* streamChat(
   // the assistant turn to resume. The final text is yielded once complete.
   for (let iter = 0; iter < 5; iter++) {
     const response = await client.messages.create({
-      model: CHAT_MODEL,
-      max_tokens: 8000,
+      model: CHAT_MODEL_OPTIONS[options.model],
+      // Room for high/max-effort thinking plus the reply.
+      max_tokens: 16000,
       thinking: { type: 'adaptive' },
+      output_config: { effort: options.effort },
       system: systemBlocks,
       tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 } as any],
       messages: currentMessages,

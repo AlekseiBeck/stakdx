@@ -10,6 +10,7 @@ interface Props {
   streamPhase?: 'idle' | 'batch1' | 'batch2' | 'done';
   brokerageConnected?: boolean;
   onTradeExecuted?: (rec: TradeRecommendation, price: number) => void;
+  scanCompleted?: boolean; // a scan finished successfully (vs never run) — drives the empty state
 }
 
 function SkeletonCard() {
@@ -43,6 +44,7 @@ export default function RecommendationsTable({
   streamPhase = 'idle',
   brokerageConnected = false,
   onTradeExecuted,
+  scanCompleted = false,
 }: Props) {
   const [dirFilter, setDirFilter] = useState<Set<string>>(new Set(['LONG', 'SHORT', 'CALL', 'PUT']));
 
@@ -72,6 +74,29 @@ export default function RecommendationsTable({
           Analyzing batch 1...
         </div>
         {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
+      </div>
+    );
+  }
+
+  // A completed scan that returned nothing is a real, common outcome (the scanner
+  // is intentionally selective) — say so, rather than reusing the cold "never run"
+  // state which makes a working scan look like it did nothing.
+  if (!isStreaming && recommendations.length === 0 && scanCompleted) {
+    return (
+      <div className="card p-12 text-center">
+        <div className="relative w-16 h-16 mx-auto mb-4">
+          <div className="relative w-16 h-16 rounded-full bg-surface-2 border border-border-strong flex items-center justify-center">
+            <svg className="w-8 h-8 text-emerald-500/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+        </div>
+        <p className="text-muted font-medium">Scan complete — no setups qualified</p>
+        <p className="text-dim text-sm mt-1 max-w-xs mx-auto leading-relaxed">
+          The scanner is intentionally selective. Zero clean setups is common when the
+          market is closed or the tape is choppy. Try again during market hours, or switch
+          the LONG / BOTH / SHORT bias above.
+        </p>
       </div>
     );
   }

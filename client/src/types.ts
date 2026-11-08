@@ -49,6 +49,11 @@ export interface PositionUpdate {
 
 export type ScanMode = 'long' | 'both' | 'short';
 
+// AI chat model + reasoning effort (server maps these keys to model IDs)
+export type ChatModelKey = 'opus' | 'sonnet';
+export type ChatEffort = 'low' | 'medium' | 'high' | 'max';
+export interface ChatOptions { model: ChatModelKey; effort: ChatEffort }
+
 export interface BrokerageStatus {
   connected: boolean;
   accountType?: 'paper' | 'live';

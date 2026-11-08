@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, GearSix, SignOut, LinkBreak } from '@phosphor-icons/react';
 import { supabase } from '../supabase';
 import { disconnectBrokerage } from '../api';
@@ -26,6 +26,12 @@ export default function AccountSettingsModal({
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();

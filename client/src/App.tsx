@@ -59,6 +59,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [isMockData, setIsMockData] = useState(false);
   const [scanError, setScanError] = useState('');
+  const [scanCompleted, setScanCompleted] = useState(false);
   const [mode, setMode] = useState<ScanMode>('both');
   const [buyingPower, setBuyingPower] = useState('');
 
@@ -122,6 +123,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
     setIsStreaming(true);
     setStreamPhase('batch1');
     setScanError('');
+    setScanCompleted(false);
     setRecommendations([]);
     setPrices({});
     setIsMockData(false);
@@ -149,6 +151,13 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
           setStreamPhase('done');
           setIsStreaming(false);
           setIsScanning(false);
+          setScanCompleted(true);
+        },
+        (msg) => {
+          setScanError(msg);
+          setStreamPhase('done');
+          setIsStreaming(false);
+          setIsScanning(false);
         }
       );
     } catch {
@@ -158,6 +167,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
         setPrices(result.prices ?? {});
         setLastScanTime(new Date());
         setIsMockData(result.mock);
+        setScanCompleted(true);
       } catch {
         setScanError('Unable to reach the server. Make sure the backend is running on port 3001.');
       } finally {
@@ -270,6 +280,7 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
         streamPhase={streamPhase}
         brokerageConnected={brokerageStatus.connected}
         onTradeExecuted={onTradeExecuted}
+        scanCompleted={scanCompleted && !scanError}
       />
     </div>
   );

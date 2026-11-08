@@ -15,6 +15,8 @@ import {
   triageCandidates,
   analyzePositionWithClaude,
   buildChatDataSection,
+  parseChatOptions,
+  streamChat,
   type ChatContext,
 } from '../src/claude';
 import type { TechnicalProfile } from '../src/alpaca';
@@ -204,5 +206,41 @@ describe('buildChatDataSection (pure)', () => {
 
   it('omits the workstation line when no workstation tickers are loaded', () => {
     expect(buildChatDataSection(baseCtx())).not.toContain('RESEARCH WORKSTATION');
+  });
+});
+
+describe('parseChatOptions (pure)', () => {
+  it('defaults to Opus at medium effort when nothing is sent', () => {
+    expect(parseChatOptions(undefined)).toEqual({ model: 'opus', effort: 'medium' });
+  });
+
+  it('accepts the allowed model and effort keys', () => {
+    expect(parseChatOptions({ model: 'sonnet', effort: 'max' })).toEqual({ model: 'sonnet', effort: 'max' });
+  });
+
+  it('rejects raw model IDs and unknown values, falling back per field', () => {
+    expect(parseChatOptions({ model: 'claude-fable-5-1', effort: 'high' })).toEqual({ model: 'opus', effort: 'high' });
+    expect(parseChatOptions({ model: 'sonnet', effort: 'xhigh' })).toEqual({ model: 'sonnet', effort: 'medium' });
+    expect(parseChatOptions({ model: 'toString' })).toEqual({ model: 'opus', effort: 'medium' });
+  });
+});
+
+describe('streamChat', () => {
+  const ctx: ChatContext = {
+    positions: [], scanResults: [], news: [], prices: {},
+    candleSummaries: {}, tickerNews: {}, newsAPIArticles: [],
+  };
+  const drain = async (gen: AsyncGenerator<string>) => { const out: string[] = []; for await (const c of gen) out.push(c); return out; };
+
+  it('sends the selected model and effort', async () => {
+    create.mockResolvedValueOnce({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'hi' }] });
+    expect(await drain(streamChat([{ role: 'user', content: 'q' }], ctx, { model: 'sonnet', effort: 'high' }))).toEqual(['hi']);
+    expect(create.mock.calls[0][0]).toMatchObject({ model: 'claude-sonnet-5-5', output_config: { effort: 'high' } });
+  });
+
+  it('defaults to Opus 5.5 at medium effort', async () => {
+    create.mockResolvedValueOnce({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'hi' }] });
+    await drain(streamChat([{ role: 'user', content: 'q' }], ctx));
+    expect(create.mock.calls[0][0]).toMatchObject({ model: 'claude-opus-5-5', output_config: { effort: 'medium' } });
   });
 });

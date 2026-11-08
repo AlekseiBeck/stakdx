@@ -23,6 +23,12 @@ export default function AddPositionModal({ prefill, onClose, onAdd }: Props) {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  useEffect(() => {
     if (prefill) {
       setTicker(prefill.ticker);
       setDirection(prefill.direction === 'LONG' || prefill.direction === 'CALL' ? 'long' : 'short');

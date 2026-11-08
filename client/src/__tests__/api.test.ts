@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
 vi.mock('../supabase', () => ({ supabase: { auth: { getSession } } }));
 
-import { searchNewsArticles, addPosition, deletePosition, fetchLinkPreview, fetchWatchlist } from '../api';
+import { searchNewsArticles, addPosition, deletePosition, fetchLinkPreview, fetchWatchlist, chatStream } from '../api';
 
 const okJson = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
 
@@ -74,5 +74,24 @@ describe('resilient wrappers', () => {
   it('fetchLinkPreview falls back to the hostname when the server fails', async () => {
     fetchMock().mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
     expect(await fetchLinkPreview('https://www.bloomberg.com/news/x')).toEqual({ title: 'bloomberg.com', source: 'bloomberg.com' });
+  });
+});
+
+describe('chatStream', () => {
+  it('sends the chosen model + reasoning options and relays the streamed text', async () => {
+    const body = new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode('data: {"text":"hello"}\n\ndata: {"done":true}\n\n'));
+        c.close();
+      },
+    });
+    fetchMock().mockResolvedValueOnce({ ok: true, status: 200, body });
+    const ctx = { positions: [], scanResults: [], news: [], prices: {}, candleSummaries: {}, tickerNews: {}, newsAPIArticles: [] };
+    const chunks: string[] = [];
+    await chatStream([{ role: 'user', content: 'hi' }], ctx, (t) => chunks.push(t), { model: 'sonnet', effort: 'high' });
+    expect(chunks.join('')).toBe('hello');
+    const [url, init] = fetchMock().mock.calls[0];
+    expect(url).toBe('/api/chat/stream');
+    expect(JSON.parse(init.body).options).toEqual({ model: 'sonnet', effort: 'high' });
   });
 });

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { TradeRecommendation, NewsItem, Position, PositionUpdate, ScanMode, BrokerageStatus, AlpacaAccount, AlpacaPosition, AlpacaOrder } from './types';
+import { TradeRecommendation, NewsItem, Position, PositionUpdate, ScanMode, ChatOptions, BrokerageStatus, AlpacaAccount, AlpacaPosition, AlpacaOrder } from './types';
 
 const BASE = ((import.meta as Record<string, any>).env.VITE_API_URL ?? '') + '/api';
 
@@ -52,7 +52,8 @@ export async function scanStream(
   mode: ScanMode,
   directions: string[],
   onBatch: (recommendations: TradeRecommendation[]) => void,
-  onComplete: (prices: Record<string, number>) => void
+  onComplete: (prices: Record<string, number>) => void,
+  onError?: (message: string) => void
 ): Promise<void> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -89,6 +90,10 @@ export async function scanStream(
       if (line.startsWith('data: ')) {
         try {
           const payload = JSON.parse(line.slice(6));
+          if (payload.error) {
+            onError?.(payload.error);
+            return;
+          }
           if (payload.done === false) {
             onBatch(payload.recommendations ?? []);
           } else if (payload.done === true) {
@@ -427,7 +432,8 @@ export async function chatStream(
     newsAPIArticles: NewsAPIResult[];
     workstationTickers?: string[];
   },
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  options?: ChatOptions
 ): Promise<void> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -439,11 +445,17 @@ export async function chatStream(
   const response = await fetch(`${BASE}/chat/stream`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ messages, context }),
+    body: JSON.stringify({ messages, context, options }),
   });
 
   if (!response.ok || !response.body) {
-    throw new Error(`Chat stream failed: ${response.status}`);
+    // Surface the server's structured error (e.g. rate-limit guidance) when present
+    let detail = `Chat stream failed: ${response.status}`;
+    try {
+      const body = await response.json();
+      if (body?.error) detail = body.error;
+    } catch { /* non-JSON body */ }
+    throw new Error(detail);
   }
 
   const reader = response.body.getReader();

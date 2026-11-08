@@ -37,6 +37,7 @@ import {
   triageCandidates,
   expandNewsQuery,
   streamChat,
+  parseChatOptions,
 } from './claude';
 import { fetchFinnhubNews, fetchUpcomingEarnings, fetchEconomicCalendar } from './finnhub';
 import { searchNews } from './newsapi';
@@ -414,8 +415,14 @@ app.get('/api/scan/stream', requireAuth, scanLimiter, async (req: AuthRequest, r
 
     res.end();
   } catch (err) {
+    // Reached only on a real failure (demo mode is handled above via !pipeline.candles).
+    // Surface an explicit error instead of masking it as an empty/mock result.
     console.error('[scan/stream] Error:', err);
-    sendEvent({ recommendations: MOCK_RECOMMENDATIONS, done: true, prices: {}, mock: true });
+    sendEvent({
+      recommendations: [],
+      done: true,
+      error: 'The scan could not complete — the analysis service errored. Please try again in a moment.',
+    });
     res.end();
   }
 });
@@ -844,8 +851,9 @@ app.get('/api/chat/context', requireAuth, async (req: AuthRequest, res) => {
 // ─── Chat: streaming AI assistant ────────────────────────────────────────────
 
 app.post('/api/chat/stream', requireAuth, chatBurstLimiter, chatHourLimiter, async (req: AuthRequest, res) => {
-  const { messages, context } = req.body as {
+  const { messages, context, options } = req.body as {
     messages?: unknown;
+    options?: unknown;
     context?: {
       positions?: unknown[];
       scanResults?: unknown[];
@@ -881,7 +889,7 @@ app.post('/api/chat/stream', requireAuth, chatBurstLimiter, chatHourLimiter, asy
       workstationTickers: (context?.workstationTickers ?? []) as string[],
     };
 
-    for await (const chunk of streamChat(messages, ctx)) {
+    for await (const chunk of streamChat(messages, ctx, parseChatOptions(options))) {
       sendEvent({ text: chunk });
     }
     sendEvent({ done: true });

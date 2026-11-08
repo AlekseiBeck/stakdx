@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   ChatCircleDots, Plus, List, X, PaperPlaneTilt, Flask, CaretRight,
-  CaretLeft, ChartLineUp, Check, PencilSimple, Layout, SquaresFour,
+  CaretLeft, ChartLineUp, Check, PencilSimple, Layout, SquaresFour, ArrowClockwise,
+  Sparkle, Brain, CaretDown,
 } from '@phosphor-icons/react';
-import { TradeRecommendation, NewsItem, Position } from '../types';
+import { TradeRecommendation, NewsItem, Position, ChatOptions, ChatModelKey, ChatEffort } from '../types';
 import {
   chatStream,
   NewsAPIResult,
@@ -28,6 +29,23 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  error?: boolean;     // assistant turn that failed to generate
+  retryText?: string;  // the user prompt to re-send when retrying a failed turn
+}
+
+// Turn a thrown chat error into honest, actionable text. The old code always
+// said "check your connection" even when the server replied with a 200 + a
+// structured error (the AI itself failed) — which sent users debugging the
+// wrong thing.
+function friendlyChatError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : '';
+  if (/failed to fetch|networkerror|load failed|connection/i.test(raw)) {
+    return "Couldn't reach the server — check your connection and try again.";
+  }
+  if (/too many|rate|limit|slow down/i.test(raw)) {
+    return raw; // surface the server's rate-limit guidance verbatim
+  }
+  return 'The AI hit an error generating a response. This usually clears up in a moment — try again.';
 }
 
 interface ChatPanelProps {
@@ -71,6 +89,9 @@ const LAYOUT_OPTIONS: { key: ChartLayout; label: string }[] = [
   { key: 'row-reverse', label: 'Chart on right' },
 ];
 
+// Below this width only the stacked (top/bottom) layouts are offered.
+const NARROW_QUERY = '(max-width: 767px)';
+
 const isChartLayout = (v: unknown): v is ChartLayout =>
   v === 'col' || v === 'col-reverse' || v === 'row' || v === 'row-reverse';
 
@@ -82,6 +103,58 @@ const MODE_OPTIONS: { key: ChatMode; label: string; Icon: typeof Flask }[] = [
   { key: 'research', label: 'Research', Icon: Flask },
   { key: 'workstation', label: 'Workstation', Icon: SquaresFour },
 ];
+
+// ─── AI model + reasoning depth (chosen in the input bar, remembered per browser) ──
+const CHAT_MODEL_LABELS: Record<ChatModelKey, string> = { opus: 'Opus 5.5', sonnet: 'Sonnet 5.5' };
+const CHAT_EFFORT_LABELS: Record<ChatEffort, string> = { low: 'Low', medium: 'Medium', high: 'High', max: 'Max' };
+const CHAT_OPTIONS_KEY = 'stakdx-chat-options';
+const DEFAULT_CHAT_OPTIONS: ChatOptions = { model: 'opus', effort: 'medium' };
+
+function loadChatOptions(): ChatOptions {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(CHAT_OPTIONS_KEY) || 'null');
+    const has = (o: object, k: unknown) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+    return {
+      model: has(CHAT_MODEL_LABELS, saved?.model) ? saved.model : DEFAULT_CHAT_OPTIONS.model,
+      effort: has(CHAT_EFFORT_LABELS, saved?.effort) ? saved.effort : DEFAULT_CHAT_OPTIONS.effort,
+    };
+  } catch {
+    return DEFAULT_CHAT_OPTIONS;
+  }
+}
+
+// A compact pill showing the current value, with a transparent native <select> laid
+// over it: phones get their native picker, and the select's 16px font stops iOS
+// Safari from zooming the page when it's tapped.
+function PillSelect<T extends string>({ label, title, icon, value, options, onChange }: {
+  label: string;
+  title: string;
+  icon: React.ReactNode;
+  value: T;
+  options: Record<T, string>;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div
+      title={title}
+      className="relative flex items-center gap-1 h-6 pl-1.5 pr-1 whitespace-nowrap flex-shrink-0 rounded-md border border-border text-[11px] font-semibold text-muted hover:text-fg hover:border-border-strong focus-within:border-amber-500/50 transition-colors"
+    >
+      {icon}
+      <span>{options[value]}</span>
+      <CaretDown size={10} weight="bold" className="text-faint" />
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base"
+      >
+        {(Object.keys(options) as T[]).map(k => (
+          <option key={k} value={k}>{options[k]}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 // ─── Ticker + timeframe detection for research mode ──────────────────────────
 
@@ -194,6 +267,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
   const [folderRenameValue, setFolderRenameValue] = useState('');
   const [renamingWorkstation, setRenamingWorkstation] = useState<string | null>(null);
   const [workstationRenameValue, setWorkstationRenameValue] = useState('');
+  const [chatOptions, setChatOptions] = useState<ChatOptions>(loadChatOptions);
   const [chartLayout, setChartLayout] = useState<ChartLayout>(() => {
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem('stakdx-chart-layout') : null;
     return saved === 'col' || saved === 'col-reverse' || saved === 'row' || saved === 'row-reverse' ? saved : 'col';
@@ -215,7 +289,20 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
   const layoutContainerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
 
-  const isHorizontal = chartLayout === 'row' || chartLayout === 'row-reverse';
+  // Phones are too narrow for a side-by-side split: there a saved left/right
+  // preference falls back to chart-on-top (the saved preference is kept for wider screens).
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(NARROW_QUERY).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia?.(NARROW_QUERY);
+    if (!mq) return;
+    const onChange = () => setIsNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const layout: ChartLayout = isNarrow && (chartLayout === 'row' || chartLayout === 'row-reverse') ? 'col' : chartLayout;
+  const isHorizontal = layout === 'row' || layout === 'row-reverse';
 
   // Pending messages to save once streaming completes (user + assistant pair)
   const pendingSave = useRef<{ sessionId: string; msgs: Array<{ role: 'user' | 'assistant'; content: string }> } | null>(null);
@@ -242,6 +329,11 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     listChatSessions().then(setSessions);
     fetchWatchlist().then(setWatchlist);
   }, []);
+
+  // Persist the chat model / reasoning choice
+  useEffect(() => {
+    try { window.localStorage.setItem(CHAT_OPTIONS_KEY, JSON.stringify(chatOptions)); } catch { /* ignore */ }
+  }, [chatOptions]);
 
   // Persist the chart/chat layout preference
   useEffect(() => {
@@ -493,12 +585,16 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     const detectedRange = detectRange(text);
     if (detectedRange && (isResearch || researchPending)) setChartRange(detectedRange);
 
-    // Ensure a session exists before we stream (so we can save messages after)
+    // Ensure a session exists before we stream (so we can save messages after).
+    // Track whether we created it *this send* so we can roll it back if the very
+    // first message fails — otherwise a failed chat leaves an empty junk session.
     let sessionId = activeSessionId;
+    let createdSessionId: string | null = null;
     if (!sessionId) {
       try {
         const session = await createChatSession(truncate(text, 60));
         sessionId = session.id;
+        createdSessionId = session.id;
         setActiveSessionId(session.id);
         let stored: ChatSession = session;
         // Apply pending research mode + auto-detected ticker to the new session
@@ -530,7 +626,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
 
     try {
       const history = [...messages, userMsg]
-        .filter(m => m.id !== 'welcome')
+        .filter(m => m.id !== 'welcome' && !m.error)
         .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
       // In workstation mode, fold the loaded tickers' candle/news context in and tell
@@ -550,7 +646,7 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
       await chatStream(history, ctx, (chunk) => {
         finalContent += chunk;
         setMessages(prev => prev.map(m => m.id === asstId ? { ...m, content: m.content + chunk } : m));
-      });
+      }, chatOptions);
 
       // Save to DB after streaming completes
       if (sessionId) {
@@ -562,13 +658,36 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
           ],
         };
       }
-    } catch {
+    } catch (err) {
       setMessages(prev => prev.map(m =>
-        m.id === asstId ? { ...m, content: "Couldn't reach the server. Check your connection." } : m
+        m.id === asstId
+          ? { ...m, content: friendlyChatError(err), error: true, retryText: text }
+          : m
       ));
+      // A session created solely for this now-failed first message has no saved
+      // messages — drop it so it doesn't clutter history.
+      if (createdSessionId) {
+        const junkId = createdSessionId;
+        deleteChatSession(junkId).catch(() => {});
+        setSessions(prev => prev.filter(s => s.id !== junkId));
+        setActiveSessionId(null);
+      }
     } finally {
       setIsStreaming(false);
     }
+  };
+
+  // Re-send a failed turn: drop the failed user+assistant pair, then send again.
+  const retry = (failed: Message) => {
+    if (!failed.retryText || isStreaming) return;
+    const text = failed.retryText;
+    setMessages(prev => {
+      const idx = prev.findIndex(m => m.id === failed.id);
+      if (idx === -1) return prev;
+      const userIdx = idx > 0 && prev[idx - 1].role === 'user' ? idx - 1 : -1;
+      return prev.filter((_, i) => i !== idx && i !== userIdx);
+    });
+    send(text);
   };
 
   // Save messages after streaming ends (isStreaming → false)
@@ -611,9 +730,9 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
     if (!draggingRef.current || !layoutContainerRef.current) return;
     const rect = layoutContainerRef.current.getBoundingClientRect();
     let frac: number;
-    if (chartLayout === 'row') frac = (e.clientX - rect.left) / rect.width;
-    else if (chartLayout === 'row-reverse') frac = (rect.right - e.clientX) / rect.width;
-    else if (chartLayout === 'col') frac = (e.clientY - rect.top) / rect.height;
+    if (layout === 'row') frac = (e.clientX - rect.left) / rect.width;
+    else if (layout === 'row-reverse') frac = (rect.right - e.clientX) / rect.width;
+    else if (layout === 'col') frac = (e.clientY - rect.top) / rect.height;
     else frac = (rect.bottom - e.clientY) / rect.height; // col-reverse
     frac = Math.min(0.85, Math.max(0.15, frac));
     setChartFraction(prev => ({ ...prev, [isHorizontal ? 'h' : 'v']: frac }));
@@ -960,13 +1079,13 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setLayoutMenuOpen(false)} />
                   <div className="absolute right-0 top-full mt-1.5 z-50 p-2 rounded-lg bg-surface border border-border-strong shadow-pop grid grid-cols-[auto_auto] gap-2">
-                    {LAYOUT_OPTIONS.map(opt => (
+                    {LAYOUT_OPTIONS.filter(opt => !isNarrow || opt.key === 'col' || opt.key === 'col-reverse').map(opt => (
                       <button
                         key={opt.key}
                         onClick={() => chooseLayout(opt.key)}
                         title={opt.label}
                         className={`p-2 rounded-md border transition-colors ${
-                          chartLayout === opt.key ? 'border-amber-500/60 bg-amber-500/10' : 'border-border hover:border-border-strong'
+                          layout === opt.key ? 'border-amber-500/60 bg-amber-500/10' : 'border-border hover:border-border-strong'
                         }`}
                       >
                         <div className={`flex ${LAYOUT_FLEX[opt.key]} gap-1 w-16 h-12`}>
@@ -1021,14 +1140,14 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
         {/* Chart(s) + conversation, arranged per the selected layout (research / workstation) */}
         <div
           ref={layoutContainerRef}
-          className={`flex-1 min-h-0 flex ${showChartPanel ? LAYOUT_FLEX[chartLayout] : 'flex-col'} ${
+          className={`flex-1 min-h-0 flex ${showChartPanel ? LAYOUT_FLEX[layout] : 'flex-col'} ${
             dragging ? `select-none ${isHorizontal ? 'cursor-col-resize' : 'cursor-row-resize'}` : ''
           }`}
         >
           {showChartPanel && (
             <div
               className={`flex flex-col min-w-0 min-h-0 flex-shrink-0 ${
-                chartCollapsed ? `${LAYOUT_DIVIDER[chartLayout]} border-border` : ''
+                chartCollapsed ? `${LAYOUT_DIVIDER[layout]} border-border` : ''
               }`}
               style={chartCollapsed ? undefined : { flexBasis: `${(isHorizontal ? chartFraction.h : chartFraction.v) * 100}%` }}
             >
@@ -1130,6 +1249,19 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
                       <span className="w-1.5 h-1.5 bg-faint rounded-full animate-bounce [animation-delay:150ms]" />
                       <span className="w-1.5 h-1.5 bg-faint rounded-full animate-bounce [animation-delay:300ms]" />
                     </span>
+                  ) : msg.error ? (
+                    <div className="flex flex-col items-start gap-2 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/30 px-3.5 py-2.5">
+                      <span className="text-sm text-red-700 dark:text-red-300">{msg.content}</span>
+                      {msg.retryText && (
+                        <button
+                          onClick={() => retry(msg)}
+                          disabled={isStreaming}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 dark:text-red-300 hover:text-red-900 dark:hover:text-red-100 transition-colors disabled:opacity-50"
+                        >
+                          <ArrowClockwise size={13} weight="bold" /> Retry
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <span className="whitespace-pre-wrap">{renderContent(msg.content)}</span>
                   )}
@@ -1142,7 +1274,8 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
               </div>
             ))
           )}
-          <div ref={bottomRef} />
+          {/* !mt-0: exempt the scroll anchor from space-y so the full-height welcome doesn't overflow */}
+          <div ref={bottomRef} className="!mt-0" />
         </div>
 
         {/* Input bar */}
@@ -1170,7 +1303,25 @@ export default function ChatPanel({ positions, scanResults, news, prices, candle
               <PaperPlaneTilt size={15} weight="fill" />
             </button>
           </div>
-          <p className="hidden sm:block text-[10px] text-dim mt-1.5 text-center">Enter to send · Shift+Enter for newline</p>
+          <div className="flex items-center gap-1.5 mt-2">
+            <PillSelect
+              label="Model"
+              title="AI model — Opus reasons deeper; Sonnet is faster and cheaper"
+              icon={<Sparkle size={12} weight="duotone" className="text-amber-600 dark:text-amber-400" />}
+              value={chatOptions.model}
+              options={CHAT_MODEL_LABELS}
+              onChange={(model) => setChatOptions(o => ({ ...o, model }))}
+            />
+            <PillSelect
+              label="Reasoning"
+              title="Reasoning depth — higher is more thorough but slower and costs more"
+              icon={<Brain size={12} weight="duotone" className="text-amber-600 dark:text-amber-400" />}
+              value={chatOptions.effort}
+              options={CHAT_EFFORT_LABELS}
+              onChange={(effort) => setChatOptions(o => ({ ...o, effort }))}
+            />
+            <p className="hidden sm:block ml-auto text-[10px] text-dim">Enter to send · Shift+Enter for newline</p>
+          </div>
         </div>
           </div>
         </div>
