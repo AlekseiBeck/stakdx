@@ -443,25 +443,30 @@ function Dashboard({ signOut, userEmail }: { signOut: () => Promise<void>; userE
               <button
                 key={id}
                 onClick={() => setMobileTab(id)}
-                className={`relative flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors ${
+                className={`relative flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
                   active ? 'text-amber-500' : 'text-dim'
                 }`}
               >
                 {active && (
                   <span className="absolute top-0 w-8 h-0.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
                 )}
-                <Icon size={20} weight={active ? 'duotone' : 'regular'} />
+                {/* Badge sits on the icon's corner so it doesn't add height to the bar */}
+                <span className="relative">
+                  <Icon size={20} weight={active ? 'duotone' : 'regular'} />
+                  {badge > 0 && (
+                    <span className={`absolute -top-1 left-full -ml-1.5 text-[8px] font-bold px-1 py-0.5 rounded-full leading-none ${
+                      active ? 'bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400' : 'bg-surface-2 text-muted'
+                    }`}>{badge}</span>
+                  )}
+                </span>
                 <span className="text-[10px] font-semibold leading-none">{label}</span>
-                {badge > 0 && (
-                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
-                    active ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-surface-2 text-dim'
-                  }`}>{badge}</span>
-                )}
               </button>
             );
           })}
           </div>
-          <div style={{ height: 'env(safe-area-inset-bottom)' }} />
+          {/* Only what's needed to clear the iPhone home indicator (~13px tall from the
+              screen edge), not the full 34px inset, which left a large empty band. */}
+          <div style={{ height: 'max(0px, calc(env(safe-area-inset-bottom) - 20px))' }} />
         </div>
       </div>
 

@@ -64,8 +64,11 @@
     transition: background-color 0.3s ease, color 0.3s ease;
   }
 
+  /* Pinned to the screen edges rather than height: 100% — recent iOS can report a
+     viewport short of the screen for home-screen web apps, leaving a blank strip below. */
   #root {
-    height: 100%;
+    position: fixed;
+    inset: 0;
     overflow: hidden;
   }
 
