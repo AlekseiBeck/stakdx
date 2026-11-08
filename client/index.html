@@ -37,21 +37,6 @@
       })();
     </script>
 
-    <!-- iPhone home-screen apps always fill the screen, but iOS reports a viewport short
-         by the top safe area. Size #root from the physical screen instead. -->
-    <script>
-      (function () {
-        if (!/iPhone/.test(navigator.userAgent) || !matchMedia('(display-mode: standalone)').matches) return;
-        function setAppHeight() {
-          var w = screen.width, h = screen.height;
-          var height = matchMedia('(orientation: portrait)').matches ? Math.max(w, h) : Math.min(w, h);
-          document.documentElement.style.setProperty('--app-height', height + 'px');
-        }
-        setAppHeight();
-        addEventListener('resize', setAppHeight);
-      })();
-    </script>
-
     <!-- Standard meta -->
     <title>Stakdx</title>
     <meta name="description" content="AI-powered swing trading dashboard with real-time stop/target alerts" />
